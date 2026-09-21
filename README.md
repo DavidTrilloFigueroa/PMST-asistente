@@ -4,7 +4,7 @@ Herramienta para elegir y consultar medidas de planes de movilidad sostenible al
 
 ## Estado actual
 
-Entorno Python 3.13 e importador de los tres Excel implementados y comprobados. Los catálogos JSON se generan localmente después de validar los datos. Todavía no hay chatbot ni llamadas a un LLM. La primera versión cubrirá selección y consulta, sin seguimiento operativo de la implementación.
+MVP completamente local. El importador de Excel está comprobado y existe una conexión reutilizable con Ollama para probar selección por objetivos. Los catálogos JSON se generan localmente después de validar los datos. La primera versión cubrirá selección y consulta, sin seguimiento operativo. Todavía no hay interfaz web ni acceso por internet.
 
 La búsqueda inicial recibirá exclusivamente identificadores y objetivos. Solo después de validar las candidatas se consultarán sus detalles. Las fases de las medidas seleccionadas se presentarán por separado y en su orden original.
 
@@ -15,6 +15,9 @@ La búsqueda inicial recibirá exclusivamente identificadores y objetivos. Solo 
 - `docs/`: documentación local privada, excluida salvo `plan_trabajo.md`.
 - `src/importar_catalogo.py`: lectura, validación y generación de los catálogos.
 - `tests/test_importar_catalogo.py`: pruebas sintéticas sin datos privados.
+- `src/ollama_local.py`: cliente de la API local con tiempo máximo y errores diferenciados.
+- `src/prueba_qwen_local.py`: prueba de selección y repetición, con validación de evidencias e IDs.
+- `tests/test_ollama_local.py`: respuestas simuladas, sin requerir Ollama.
 - `requirements.txt`: versiones utilizadas de openpyxl y et-xmlfile.
 - `AGENTS.md`: instrucciones para Codex.
 
@@ -35,6 +38,45 @@ Para ejecutar las pruebas:
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+## Probar Qwen localmente
+
+Abrir Ollama y ejecutar desde la raíz del proyecto, con el catálogo ya generado:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.prueba_qwen_local
+```
+
+El comando usa `qwen3.6:latest`, contexto de 16.384 tokens, máximo de 3.072 tokens de salida y 300 segundos por petición. Envía una primera petición y la repite una sola vez si obtiene una respuesta técnicamente válida. No cambia de modelo ni descarga nada. Puede consumir una parte importante de la RAM; no se detienen otras aplicaciones automáticamente.
+
+Para configurar explícitamente los límites:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.prueba_qwen_local --modelo qwen3.6:latest --contexto 16384 --generacion 3072 --espera 300
+```
+
+Para repetir verificando el mismo modelo de una ejecución anterior, antes de sobrescribir el informe:
+
+```powershell
+$digestPrueba = (Get-Content .\data\procesados\prueba_qwen_local.json -Raw -Encoding UTF8 | ConvertFrom-Json).entorno_inicial.modelo.digest
+.\.venv\Scripts\python.exe -m src.prueba_qwen_local --digest $digestPrueba
+```
+
+El digest identifica el contenido instalado. Si la etiqueta apunta a otro digest, el programa se detiene; no restaura ni descarga el modelo anterior. Temperatura 0 y semilla fija ayudan a comparar, pero no garantizan resultados idénticos entre versiones de Ollama o hardware.
+
+La conexión está limitada a `http://127.0.0.1:11434`, sin proxies ni redirecciones. Se comprueba que el modelo sea GGUF local y no declare referencia remota. No se cambia la dirección de escucha de Ollama. La implementación usa exclusivamente la biblioteca estándar de Python y no añade dependencias.
+
+El único catálogo enviado contiene `id` y `objetivo`. Se guarda su huella y se verifica que no tenga otros campos. Los nombres se recuperan con código después de validar la respuesta y no se envían en la repetición. La petición y los objetivos se separan de las instrucciones y se tratan como datos.
+
+La respuesta se solicita mediante el esquema JSON del parámetro `format` de la [API local de chat de Ollama](https://docs.ollama.com/api/chat). Contiene `estado`, `objetivo_interpretado`, `pregunta_aclaracion` y `medidas`; cada selección tiene `id`, `justificacion` y `evidencia_objetivo`. Se validan estructura y tipos, IDs únicos existentes, evidencia literal del objetivo de cada ID y coherencia entre estado, aclaración y lista. No se solicita ni guarda razonamiento interno.
+
+El contexto se comprueba con una cota conservadora basada en bytes UTF-8, válida para el tokenizador BPE de bytes verificado en los metadatos, más margen de plantilla y reserva de generación. No es una tokenización exacta y puede rechazar contextos que en realidad cabrían. Nunca elimina objetivos para ajustarlos. No se utiliza automáticamente el contexto máximo del modelo.
+
+`data/procesados/prueba_qwen_local.json` contiene metadatos y digest, modelos cargados, configuración, huella del catálogo, resultados validados y métricas que proporciona Ollama. Los tiempos de carga y generación se convierten de nanosegundos a segundos. La medición de hardware adjunta conserva su fecha: al repetir, no debe interpretarse como memoria libre actual. El informe se reemplaza en cada ejecución; copiarlo dentro de `data/procesados/` si se quieren conservar comparaciones.
+
+Errores de servicio, modelo ausente, memoria insuficiente, tiempo agotado, contexto insuficiente, truncamiento y respuesta inválida son fallos explícitos (salida 1), nunca «sin coincidencias». Tras agotar el tiempo se cierra la conexión y no se repite la inferencia; la liberación de recursos depende de Ollama y no se fuerza la detención de procesos. La permanencia solicitada del modelo en memoria es de cinco minutos.
+
+La validación técnica no acredita la pertinencia, exhaustividad ni utilidad de la selección. Las recomendaciones deben revisarse con el usuario antes de dar por validada su calidad.
 
 ## Preparar el entorno si falta
 

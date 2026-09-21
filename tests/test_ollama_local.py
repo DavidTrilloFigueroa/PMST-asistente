@@ -2,11 +2,14 @@
 
 from copy import deepcopy
 import json
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from src.ollama_local import ErrorLocal, OllamaLocal, clasificar_error, json_estricto
-from src.prueba_qwen_local import (extraer_resultado, preparar_peticion,
+from src.prueba_qwen_local import (ejecutar, extraer_resultado, preparar_peticion,
                                   validar_catalogo, validar_respuesta)
 
 CATALOGO = [{"id": "PRUEBA-A", "objetivo": "Objetivo sintético para reducir viajes individuales."}]
@@ -122,6 +125,69 @@ class ValidacionLocalTests(unittest.TestCase):
     def test_no_hay_endpoint_descarga(self):
         with self.assertRaises(ErrorLocal):
             OllamaLocal().solicitar("/api/pull", {"model": "prueba"})
+
+
+class FlujoSimuladoTests(unittest.TestCase):
+    def ejecutar_simulado(self, respuesta=None, fallo=None, crear_fichas=False):
+        class ClienteSimulado:
+            def __init__(self):
+                self.cuerpos = []
+
+            def inspeccionar(self, modelo, digest=None):
+                return {"modelo": {"digest": "digest-sintetico"},
+                        "detalle": {"model_info": {"prueba.context_length": 32768,
+                                    "tokenizer.ggml.model": "gpt2"}, "capabilities": ["completion"]},
+                        "cargados": {"models": []}}
+
+            def solicitar(self, ruta, cuerpo=None, espera=10):
+                if ruta == "/api/ps":
+                    return {"models": []}
+                self.cuerpos.append(deepcopy(cuerpo))
+                if fallo:
+                    raise fallo
+                return {"done": True, "done_reason": "stop", "eval_count": 20,
+                        "prompt_eval_count": 100, "message": {"content": json.dumps(respuesta)}}
+
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            procesados = raiz / "data/procesados"
+            procesados.mkdir(parents=True)
+            (procesados / "objetivos_busqueda.json").write_text(json.dumps(CATALOGO), encoding="utf-8")
+            if crear_fichas:
+                (procesados / "medidas.json").write_text(json.dumps([{"id": "PRUEBA-A", "nombre": "NOMBRE_NO_ENVIAR", "descripcion": "DETALLE_NO_ENVIAR"}]), encoding="utf-8")
+            args = SimpleNamespace(modelo="prueba-local", contexto=16384, generacion=1024,
+                                   espera=10, digest=None, peticion="Petición sintética")
+            cliente = ClienteSimulado()
+            with patch("src.prueba_qwen_local.RAIZ", raiz), patch("src.prueba_qwen_local.consultar_ps_cli", return_value={}), patch("builtins.print"):
+                informe = ejecutar(args, cliente)
+            guardado = json.loads((procesados / "prueba_qwen_local.json").read_text(encoding="utf-8"))
+            self.assertEqual(guardado, informe)
+            return informe, cliente.cuerpos
+
+    def test_exito_repite_solo_catalogo_objetivos(self):
+        informe, cuerpos = self.ejecutar_simulado(RESPUESTA, crear_fichas=True)
+        self.assertEqual(informe["estado"], "completado")
+        self.assertEqual(len(cuerpos), 2)
+        self.assertEqual(cuerpos[0], cuerpos[1])
+        self.assertNotIn("NOMBRE_NO_ENVIAR", json.dumps(cuerpos))
+        self.assertNotIn("DETALLE_NO_ENVIAR", json.dumps(cuerpos))
+        self.assertEqual(informe["peticiones"][0]["nombres_para_presentacion"]["PRUEBA-A"], "NOMBRE_NO_ENVIAR")
+
+    def test_invalida_no_lee_fichas_ni_repite(self):
+        respuesta = deepcopy(RESPUESTA)
+        respuesta["medidas"][0]["id"] = "NO-EXISTE"
+        informe, cuerpos = self.ejecutar_simulado(respuesta)
+        self.assertEqual(len(cuerpos), 1)
+        self.assertEqual(informe["errores"][0]["codigo"], "respuesta_invalida")
+        self.assertNotIn("respuesta", informe["peticiones"][0])
+        self.assertFalse(informe["respuesta_tecnicamente_valida"])
+
+    def test_timeout_detiene_prueba_sin_simular_sin_coincidencias(self):
+        informe, cuerpos = self.ejecutar_simulado(fallo=ErrorLocal("tiempo_agotado", "Tiempo agotado"))
+        self.assertEqual(len(cuerpos), 1)
+        self.assertEqual(informe["estado"], "error")
+        self.assertEqual(informe["errores"][0]["codigo"], "tiempo_agotado")
+        self.assertNotIn("respuesta", informe["peticiones"][0])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Plan de trabajo
 
-Estado: preparación, revisión estructural, catálogo JSON y validación del importador completados. Búsqueda con LLM, presentación, selección y conversación pendientes.
+Estado: preparación, revisión estructural, catálogo JSON y validación del importador completados. MVP completamente local con Ollama. Conexión reutilizable y prueba inicial de selección completadas con dos respuestas técnicamente válidas. Calidad pendiente de revisión humana; interfaz web y acceso por internet fuera del alcance actual.
 
 ## 1. Preparación
 
@@ -16,7 +16,7 @@ Completada. El comando `.\.venv\Scripts\python.exe -m src.importar_catalogo` gen
 
 ## 4. Búsqueda por objetivos
 
-Pendiente. Buscar exclusivamente sobre identificadores y objetivos documentados, usando el objetivo expresado por el usuario. Validar los identificadores que devuelva el LLM antes de consultar detalles. No usar otros campos para elegir candidatas ni incorporar automáticamente medidas relacionadas. El archivo de entrada restringido ya está generado y comprobado.
+Prueba inicial completada con `qwen3.6:latest` instalado localmente. Se envía exclusivamente el catálogo completo de identificadores y objetivos. Hay esquema JSON, validación de IDs, evidencias literales y coherencia de estado, aclaración y medidas. Contexto, generación y espera acotados y configurables; sin descargas, cambio automático de modelo ni recorte silencioso. Resultados y métricas privados en `data/procesados/prueba_qwen_local.json`. Pendiente revisar con el usuario la pertinencia y exhaustividad de la selección.
 
 ## 5. Presentación
 
@@ -28,10 +28,12 @@ Pendiente. Permitir seleccionar una o varias medidas. Mostrar las fases document
 
 ## 7. Conversación
 
-Pendiente. Integrar el flujo de chat: recoger el problema, identificar el objetivo, solicitar aclaraciones cuando hagan falta y facilitar la selección. Mantener la separación entre búsqueda por objetivos y consulta de detalles durante toda la conversación. No se han implementado llamadas a un LLM.
+Pendiente. Integrar el flujo de chat local: recoger el problema, identificar el objetivo, solicitar aclaraciones cuando hagan falta y facilitar la selección. Mantener la separación entre búsqueda por objetivos y consulta de detalles durante toda la conversación. Ya existe una prueba aislada con el LLM local; no hay interfaz web ni conversación de varios turnos.
 
 ## 8. Validación
 
 Completada para el importador: pruebas sintéticas aisladas con unittest, importación real, contraste de recuentos revisados, referencias y nombres, duplicados con simetría, separación estricta de objetivos, integridad de originales y conservación del catálogo anterior ante errores. Resultados privados en `docs/validacion_importacion.md` y `data/procesados/informe_validacion.json`, excluidos de Git.
 
-Pendiente para la aplicación futura: validación de identificadores devueltos por el LLM, acceso exclusivo a objetivos durante la búsqueda, presentación de ausencias y consulta de relaciones y fases por medida. No incluir datos sintéticos de las pruebas en el catálogo real.
+Completada la validación técnica de la prueba local: respuestas simuladas sin Ollama y dos peticiones reales, con comprobación de esquema, IDs, citas literales, coherencia y métricas. Se comprueba que una respuesta inválida no consulte fichas ni active una repetición y que los nombres nunca pasen a la petición del modelo.
+
+Pendiente para la aplicación futura: revisión humana de recomendaciones, integración de la validación en la conversación, presentación de ausencias y consulta de relaciones y fases por medida. No incluir datos sintéticos de las pruebas en el catálogo real.

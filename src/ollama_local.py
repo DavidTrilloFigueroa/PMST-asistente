@@ -93,11 +93,16 @@ class OllamaLocal:
     def inspeccionar(self, modelo, digest_esperado=None):
         version = self.solicitar("/api/version")
         instalados = self.solicitar("/api/tags").get("models", [])
+        if not isinstance(instalados, list) or any(not isinstance(m, dict) for m in instalados):
+            raise ErrorLocal("respuesta_invalida", "Lista de modelos inválida en la API local.")
         coincidencias = [m for m in instalados if m.get("name") == modelo]
         if len(coincidencias) != 1:
             raise ErrorLocal("modelo_ausente", "La etiqueta solicitada no figura en los modelos instalados. No se descargará nada.")
         registro = coincidencias[0]
         detalle = self.solicitar("/api/show", {"model": modelo})
+        if (not isinstance(registro.get("details"), dict) or not isinstance(detalle.get("details"), dict)
+                or not isinstance(registro.get("size"), int)):
+            raise ErrorLocal("respuesta_invalida", "Metadatos locales incompletos o inválidos.")
         if (registro.get("remote_host") or registro.get("remote_model") or detalle.get("remote_host")
                 or detalle.get("remote_model") or registro.get("details", {}).get("format") != "gguf"
                 or detalle.get("details", {}).get("format") != "gguf"

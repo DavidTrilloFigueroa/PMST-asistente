@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import time
 
@@ -136,11 +138,30 @@ def guardar(ruta, informe):
         temporal.unlink(missing_ok=True)
 
 
+def consultar_ps_cli():
+    """Consulta solicitada a la CLI, forzando también su servidor a loopback."""
+    ejecutable = shutil.which("ollama")
+    if not ejecutable and os.name == "nt":
+        candidato = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Ollama/ollama.exe"
+        if candidato.is_file():
+            ejecutable = str(candidato)
+    if not ejecutable:
+        return {"disponible": False, "motivo": "CLI no localizada; consultar cargados_despues de la API."}
+    try:
+        resultado = subprocess.run([ejecutable, "ps"], capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace", timeout=10,
+                                   env={**os.environ, "OLLAMA_HOST": URL_LOCAL},
+                                   creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        return {"disponible": resultado.returncode == 0, "salida": resultado.stdout.strip()}
+    except (OSError, subprocess.TimeoutExpired):
+        return {"disponible": False, "motivo": "No se pudo consultar la CLI."}
+
+
 def ejecutar(args, cliente=None):
     cliente = cliente or OllamaLocal()
     ruta = RAIZ / "data/procesados/prueba_qwen_local.json"
     informe = {"fecha_utc": datetime.now(timezone.utc).isoformat(), "url": URL_LOCAL,
-               "estado": "en_curso", "modelo_ejecutable": False, "respuesta_tecnicamente_valida": False,
+               "estado": "en_curso", "modelo_ejecutable": None, "respuesta_tecnicamente_valida": False,
                "calidad_seleccion": "pendiente_de_revision_humana", "peticion": args.peticion,
                "configuracion": {"modelo": args.modelo, "contexto": args.contexto, "generacion": args.generacion,
                                  "espera_s": args.espera, "think": False, "temperatura": 0, "seed": 42},
@@ -151,6 +172,7 @@ def ejecutar(args, cliente=None):
             informe["hardware_previo_con_fecha"] = json.loads(hardware.read_text(encoding="utf-8-sig"))
         entorno = cliente.inspeccionar(args.modelo, args.digest)
         informe["entorno_inicial"] = entorno
+        informe["ollama_ps_inicial"] = consultar_ps_cli()
         digest = entorno["modelo"]["digest"]
         info = entorno["detalle"]["model_info"] or {}
         maximos = [v for k, v in info.items() if k.endswith(".context_length") and isinstance(v, int)]
@@ -188,6 +210,7 @@ def ejecutar(args, cliente=None):
                 del bruto
                 posterior = cliente.inspeccionar(args.modelo, digest)
                 corrida["cargados_despues"] = posterior["cargados"]
+                corrida["ollama_ps"] = consultar_ps_cli()
                 # Recuperación local posterior: jamás se incluye en cuerpo ni en la siguiente petición.
                 fichas = json.loads((RAIZ / "data/procesados/medidas.json").read_text(encoding="utf-8"))
                 nombres = {m["id"]: m.get("nombre") for m in fichas}
@@ -202,6 +225,10 @@ def ejecutar(args, cliente=None):
     except (ErrorLocal, OSError, ValueError) as exc:
         informe["estado"] = "error"
         informe["errores"].append({"codigo": getattr(exc, "codigo", "archivo_o_dato_invalido"), "mensaje": str(exc)})
+        try:
+            informe["cargados_tras_error"] = cliente.solicitar("/api/ps")
+        except ErrorLocal:
+            informe["cargados_tras_error"] = None
         print(f"ERROR: {exc}", flush=True)
     guardar(ruta, informe)
     return informe

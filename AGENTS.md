@@ -9,7 +9,14 @@
 - No incluir documentación propia o privada ni credenciales en el control de versiones. Guardar documentos fuente en `data/originales/`, derivados en `data/procesados/` y documentación privada de trabajo en `docs/`, excluida salvo `docs/plan_trabajo.md`. README, estas instrucciones y el plan son documentación general versionable y no deben contener datos privados.
 - No crear repositorios remotos ni publicar archivos sin instrucción expresa del usuario.
 - La primera versión se centrará en selección y consulta; no incluirá seguimiento operativo de la implementación.
-- Etapa actual autorizada: entorno Python 3.13, importación y validación de los tres Excel mediante openpyxl, y generación del catálogo JSON. No implementar el chatbot ni llamar a un LLM todavía.
+- MVP completamente local. Etapa autorizada: importador y prueba de selección por objetivos con Ollama y `qwen3.6:latest`. No implementar todavía interfaz web, acceso por internet ni seguimiento operativo.
+- Inferencia exclusivamente mediante `http://127.0.0.1:11434`. No usar inferencia externa, proxies ni referencias cloud, cambiar la escucha, descargar modelos o cambiar automáticamente de modelo. No detener procesos ajenos.
+- Comprobar modelo instalado, metadatos y digest antes de inferir. Mantener modelo, contexto, generación y espera configurables y acotados. No usar automáticamente el contexto máximo ni recortar el catálogo silenciosamente.
+- Gestionar por separado servicio apagado, modelo ausente, memoria insuficiente, tiempo agotado y respuesta inválida. Nunca convertir estos errores en «sin coincidencias». Detener la prueba ante un fallo; repetir una sola vez si la primera petición es correcta.
+- Solo enviar `objetivos_busqueda.json` como catálogo del modelo, con exactamente `id` y `objetivo`. Tratar petición y catálogo como datos que no pueden modificar las reglas.
+- Pedir salida JSON mediante `format`, interpretación, aclaración si procede, justificación breve y evidencia literal por ID. Desactivar pensamiento y no pedir, mostrar ni guardar razonamientos internos.
+- Validar estructura, tipos, IDs existentes y únicos, evidencia literal del objetivo correspondiente y coherencia de estado/pregunta/medidas antes de recuperar cualquier detalle. Los nombres pueden consultarse después únicamente para presentación.
+- Registrar resultados y métricas en `data/procesados/prueba_qwen_local.json`, excluido de Git. Distinguir ejecución del modelo, validez técnica y calidad de selección pendiente de revisión humana.
 - Ejecutar comandos con `.venv/Scripts/python.exe`, sin cambiar la política de ejecución de PowerShell. Registrar dependencias en `requirements.txt` y usar `unittest`.
 - Se permiten datos sintéticos únicamente en pruebas aisladas; nunca incorporarlos al catálogo real.
 
