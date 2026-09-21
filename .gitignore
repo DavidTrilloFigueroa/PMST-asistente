@@ -1,0 +1,17 @@
+# Credenciales y configuración local
+.env
+.env.*
+!.env.example
+
+# Entorno Python y cachés
+.venv/
+__pycache__/
+*.py[cod]
+
+# Documentos originales y datos derivados privados
+/data/originales/**
+/data/procesados/**
+
+# Documentación privada de trabajo; conservar el plan general
+/docs/**
+!/docs/plan_trabajo.md
