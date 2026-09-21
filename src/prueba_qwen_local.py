@@ -35,6 +35,7 @@ ESQUEMA = {
         "medidas": {"type": "array", "items": {"type": "object", "additionalProperties": False,
             "required": ["id", "justificacion", "evidencia_objetivo"],
             "properties": {k: {"type": "string", "minLength": 1} for k in ("id", "justificacion", "evidencia_objetivo")}}},
+    },
 }
 
 
