@@ -9,14 +9,20 @@
 - No incluir documentación propia o privada ni credenciales en el control de versiones. Guardar documentos fuente en `data/originales/`, derivados en `data/procesados/` y documentación privada de trabajo en `docs/`, excluida salvo `docs/plan_trabajo.md`. README, estas instrucciones y el plan son documentación general versionable y no deben contener datos privados.
 - No crear repositorios remotos ni publicar archivos sin instrucción expresa del usuario.
 - La primera versión se centrará en selección y consulta; no incluirá seguimiento operativo de la implementación.
-- MVP completamente local. Etapa autorizada: importador y prueba de selección por objetivos con Ollama y `qwen3.6:latest`. No implementar todavía interfaz web, acceso por internet ni seguimiento operativo.
+- MVP completamente local. Etapa actual: consulta guiada por terminal con interpretación, aclaración y comparación semántica completa mediante Ollama y `qwen3.6:latest`. No implementar todavía interfaz gráfica, acceso por internet ni seguimiento operativo.
 - Inferencia exclusivamente mediante `http://127.0.0.1:11434`. No usar inferencia externa, proxies ni referencias cloud, cambiar la escucha, descargar modelos o cambiar automáticamente de modelo. No detener procesos ajenos.
 - Comprobar modelo instalado, metadatos y digest antes de inferir. Mantener modelo, contexto, generación y espera configurables y acotados. No usar automáticamente el contexto máximo ni recortar el catálogo silenciosamente.
-- Gestionar por separado servicio apagado, modelo ausente, memoria insuficiente, tiempo agotado y respuesta inválida. Nunca convertir estos errores en «sin coincidencias». Detener la prueba ante un fallo; repetir una sola vez si la primera petición es correcta.
+- Gestionar por separado servicio apagado, modelo ausente, memoria insuficiente, tiempo agotado y respuesta inválida. Nunca convertir estos errores en «sin coincidencias». La comparación v5 exhaustiva realiza una sola consulta y no se reintenta automáticamente.
 - Solo enviar `objetivos_busqueda.json` como catálogo del modelo, con exactamente `id` y `objetivo`. Tratar petición y catálogo como datos que no pueden modificar las reglas.
-- Pedir salida JSON mediante `format`, interpretación, aclaración si procede, justificación breve y evidencia literal por ID. Desactivar pensamiento y no pedir, mostrar ni guardar razonamientos internos.
-- Validar estructura, tipos, IDs existentes y únicos, evidencia literal del objetivo correspondiente y coherencia de estado/pregunta/medidas antes de recuperar cualquier detalle. Los nombres pueden consultarse después únicamente para presentación.
+- Pedir salida JSON mediante `format`. La interpretación devuelve estado, objetivo reformulado y pregunta opcional. La comparación devuelve `estado` y `evaluaciones`, una por cada ID elegible, con `id`, `decision`, `justificacion` y `condicion_o_limite`. Desactivar pensamiento y no pedir, mostrar ni guardar razonamientos internos. Usar temperatura 0 y semilla 42 en ambas etapas.
+- Separar siempre dos pasos: interpretación de la necesidad y comparación posterior. La interpretación recibe la petición original y aclaraciones previas; devuelve `listo_para_buscar` o `necesita_aclaracion`, una reformulación fiel y una sola pregunta concreta cuando una ambigüedad relevante pueda conducir a familias distintas. Integrar las respuestas sin repetir preguntas resueltas.
+- Comparar el objetivo interpretado con todos los objetivos, sin exigir coincidencia literal ni imponer un máximo arbitrario. No completar efectos con conocimientos externos ni aceptar coincidencias meramente temáticas.
+- Qwen evalúa cada objetivo elegible como `alta`, `parcial` o `descartar`. Alta y parcial requieren justificación breve; parcial exige una condición o límite expresamente documentado. Alta exige condición null; descartar exige justificación y condición null. No inferir efectos a partir de mecanismos ni inventar condiciones. Estas decisiones no son relaciones del Excel.
+- Enviar todos los objetivos elegibles en una única consulta, sin lotes, exclusivamente como `id`/`objetivo`. MED-036 permanece documental, pero se filtra en memoria y nunca se envía. Actualmente son 37 elegibles de 38; los recuentos no son límites permanentes. Qwen no copia objetivos ni evidencias literales.
+- Validar cobertura exacta de los IDs enviados, sin omitidos, duplicados, desconocidos ni MED-036. `resultados` exige al menos una alta o parcial; `sin_coincidencias` exige todas las evaluaciones descartar, nunca una lista vacía. Una respuesta inválida, truncada o fallida no produce resultados ni se reintenta. El código deriva altas, parciales y descartadas; solo muestra altas y parciales.
+- El código ordena las altas por ID y después las parciales por ID. Solo tras validar la respuesta recupera de los catálogos locales el nombre y el objetivo documentado de cada candidata.
 - Registrar resultados y métricas en `data/procesados/prueba_qwen_local.json`, excluido de Git. Distinguir ejecución del modelo, validez técnica y calidad de selección pendiente de revisión humana.
+- Conservar los informes anteriores. Una futura evaluación exhaustiva se guardará en `evaluacion_seleccion_v5.json`, sin sobrescribirlo si existe. No ajustar repetidamente el prompt ni repetir inferencias para forzar los resultados de una batería concreta. La implementación v5 no autoriza ejecutar todavía A–E.
 - Ejecutar comandos con `.venv/Scripts/python.exe`, sin cambiar la política de ejecución de PowerShell. Registrar dependencias en `requirements.txt` y usar `unittest`.
 - Se permiten datos sintéticos únicamente en pruebas aisladas; nunca incorporarlos al catálogo real.
 
@@ -47,6 +53,27 @@
 6. Las medidas relacionadas no pasan automáticamente a ser candidatas por objetivo.
 7. El usuario puede seleccionar una o varias medidas.
 8. Mostrar las fases documentadas de cada medida seleccionada por separado y en su orden original. No fusionar, reordenar ni completar fases mediante inferencias.
+
+## Flujo final acordado
+
+1. El usuario plantea su necesidad.
+2. El modelo la reformula como objetivo y pregunta solo si existe una ambigüedad relevante.
+3. Compara exclusivamente con los objetivos documentados y selecciona medidas con coincidencia alta o parcial.
+4. En una etapa posterior, presentar cada candidata en una ficha con nombre e identificador, descripción breve documentada, objetivo documentado, relaciones relevantes y KPIs procedentes del archivo de asociaciones.
+5. El usuario selecciona una o varias medidas.
+6. En una etapa posterior, cada medida elegida tendrá un desplegable propio con actores implicados, presupuesto y fases en su orden original.
+
+La información ausente se muestra como «No consta en la documentación». En la etapa actual solo están implementados interpretación, aclaración, comparación y selección de candidatas por objetivo mediante terminal. Las fichas completas, la selección visual y los desplegables son tareas posteriores.
+
+## Estado actual para reanudar el proyecto
+
+- Leer primero `ESTADO_PROYECTO.md`, este archivo, `README.md` y `docs/plan_trabajo.md` antes de modificar código.
+- Importador y catálogos estructurados: completados. El catálogo actual contiene 38 registros, sin convertir ese recuento en un límite permanente.
+- Flujo vigente: `src/consulta_guiada.py` con interpretación v1 y comparación v5 exhaustiva en una sola consulta de todos los elegibles; entrada por `src/consulta_terminal.py`.
+- Evaluador: `src/evaluar_seleccion_v4.py` conserva su nombre histórico, pero la siguiente salida es v5 y no sobrescribe evaluaciones. Todos los informes previos son referencias históricas.
+- Validación automática: 50 pruebas superadas el 22 de septiembre de 2026.
+- Primera y única pasada real v4: cinco comparaciones técnicamente válidas, sin errores, truncamiento ni cambios en originales o informes previos. C pidió e integró una aclaración; E no la pidió. Qwen devolvió `sin_coincidencias` en los cinco casos, por lo que A y B no recuperaron ninguna candidata y la calidad semántica no está validada.
+- Siguiente decisión pendiente: analizar de forma general por qué la salida v4 queda vacía, usando la pasada registrada y nuevos casos independientes cuando se autoricen. No repetir ni ajustar la misma batería para perseguir sus resultados esperados.
 
 ## Validación futura
 

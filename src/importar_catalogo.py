@@ -22,7 +22,7 @@ ASOCIACIONES = "Relaciones medidas-KPIs.xlsx"
 CAMPOS_MEDIDA = {
     "id": "ID", "nombre": "Nombre medida", "objetivo": "Objetivo",
     "descripcion": "Descripción", "fases_implementacion": "Fases de implementación",
-    "kpis_texto_ficha": "KPI's Éxito/Eficacia", "resultados": "Resultados",
+    "kpis_texto_ficha": "KPI's Éxito/Eficacia",
     "presupuesto": "Presupuesto", "actores_implicados": "Actores implicados",
 }
 CAMPOS_RELACION = {

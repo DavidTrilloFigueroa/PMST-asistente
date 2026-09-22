@@ -4,7 +4,7 @@ Herramienta para elegir y consultar medidas de planes de movilidad sostenible al
 
 ## Estado actual
 
-MVP completamente local. El importador de Excel está comprobado y existe una conexión reutilizable con Ollama para probar selección por objetivos. Los catálogos JSON se generan localmente después de validar los datos. La primera versión cubrirá selección y consulta, sin seguimiento operativo. Todavía no hay interfaz web ni acceso por internet.
+MVP completamente local. La consulta guiada interpreta la petición, solicita aclaraciones y exige una evaluación explícita de cada objetivo elegible en una sola selección v5. El catálogo actual tiene 38 medidas: MED-036 se conserva documentalmente y se excluye del envío, dejando 37 objetivos elegibles. Usa Ollama y `qwen3.6:latest`. Sin interfaz gráfica, acceso por internet ni seguimiento operativo. La evaluación real A–E de v5 sigue pendiente de autorización.
 
 La búsqueda inicial recibirá exclusivamente identificadores y objetivos. Solo después de validar las candidatas se consultarán sus detalles. Las fases de las medidas seleccionadas se presentarán por separado y en su orden original.
 
@@ -17,9 +17,17 @@ La búsqueda inicial recibirá exclusivamente identificadores y objetivos. Solo 
 - `tests/test_importar_catalogo.py`: pruebas sintéticas sin datos privados.
 - `src/ollama_local.py`: cliente de la API local con tiempo máximo y errores diferenciados.
 - `src/prueba_qwen_local.py`: prueba de selección y repetición, con validación de evidencias e IDs.
+- `src/seleccion_objetivos.py`: instrucciones v2 versionadas, esquema JSON y validación de la selección.
+- `src/evaluar_seleccion_v2.py`: batería reproducible de cuatro casos, una inferencia por caso.
+- `src/consulta_guiada.py`: interpretación, validación y consulta única al catálogo completo del flujo vigente.
+- `src/consulta_terminal.py`: entrada interactiva por terminal.
+- `src/evaluar_seleccion_v3.py`: evaluación histórica del flujo anterior por lotes.
+- `src/evaluar_seleccion_v4.py`: evaluación vigente de la consulta única con cinco casos.
+- `tests/test_consulta_guiada.py`: pruebas sintéticas de aclaraciones, consulta única y validación de candidatas.
 - `tests/test_ollama_local.py`: respuestas simuladas, sin requerir Ollama.
 - `requirements.txt`: versiones utilizadas de openpyxl y et-xmlfile.
 - `AGENTS.md`: instrucciones para Codex.
+- `ESTADO_PROYECTO.md`: resumen para reanudar el trabajo en otro chat.
 
 ## Regenerar el catálogo en PowerShell
 
@@ -39,7 +47,37 @@ Para ejecutar las pruebas:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-## Probar Qwen localmente
+## Iniciar una consulta guiada por terminal
+
+1. Abrir Ollama.
+2. Abrir una terminal de PowerShell en la raíz del proyecto.
+3. Ejecutar:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.consulta_terminal
+```
+
+La terminal solicita la necesidad. Si hay una ambigüedad relevante, muestra una sola pregunta y conserva la petición original al incorporar la respuesta. Cuando el objetivo está claro, filtra MED-036 en memoria y envía todos los objetivos elegibles en una única consulta, exclusivamente con `id` y `objetivo`. No modifica el catálogo documental ni fija un recuento permanente.
+
+También se puede aportar la primera petición en el comando:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.consulta_terminal --peticion "Quiero reducir los viajes al trabajo en coche individual"
+```
+
+Qwen devuelve `estado` y `evaluaciones`: exactamente una por cada ID enviado. Cada evaluación contiene `id`, `decision` (`alta`, `parcial` o `descartar`), `justificacion` y `condicion_o_limite`. Alta y parcial exigen justificación; solo parcial admite y exige condición, expresamente respaldada por el objetivo. Descartar exige ambos textos null. `resultados` exige alguna alta o parcial; `sin_coincidencias` exige todas descartadas. No devuelve candidatas separadas ni copia objetivos o evidencias literales. Se rechazan omisiones, IDs repetidos/no enviados, MED-036 y estados o condiciones incoherentes, sin mostrar resultados ni reintentar.
+
+El código deriva altas, parciales y descartadas. Solo muestra altas primero y parciales después, ambas por ID. Tras validar toda la cobertura, recupera el nombre desde `medidas.json` y el objetivo documental desde `objetivos_busqueda.json`. La presentación conserva su campo `coincidencia`, adaptado por código desde `decision`; las descartadas no se muestran. Las fichas completas, relaciones, KPIs y fases todavía no se presentan.
+
+Interpretación y selección usan temperatura 0, semilla 42 y `think: false`. Ya estaban configuradas así; ahora también se registran temperatura y semilla en los metadatos. Ayudan a reproducir, pero no garantizan salidas idénticas entre versiones o hardware. Contexto 16.384, generación 3.072 y espera 300 s permanecen configurables. La respuesta exhaustiva es más larga: su suficiencia y calidad están pendientes de evaluación real. Un truncamiento se rechaza, sin recortar el catálogo ni reintentar. La validación estructural no demuestra que una condición esté semánticamente respaldada por el documento.
+
+Configuración explícita equivalente a la actual:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.consulta_terminal --modelo qwen3.6:latest --contexto 16384 --generacion 3072 --espera 300
+```
+
+## Prueba histórica de Qwen
 
 Abrir Ollama y ejecutar desde la raíz del proyecto, con el catálogo ya generado:
 
@@ -47,7 +85,7 @@ Abrir Ollama y ejecutar desde la raíz del proyecto, con el catálogo ya generad
 .\.venv\Scripts\python.exe -m src.prueba_qwen_local
 ```
 
-El comando usa `qwen3.6:latest`, contexto de 16.384 tokens, máximo de 3.072 tokens de salida y 300 segundos por petición. Envía una primera petición y la repite una sola vez si obtiene una respuesta técnicamente válida. No cambia de modelo ni descarga nada. Puede consumir una parte importante de la RAM; no se detienen otras aplicaciones automáticamente.
+El comando usa `qwen3.6:latest`, contexto de 16.384 tokens, máximo de 3.072 tokens de salida y 300 segundos por petición. Envía una primera petición y la repite una sola vez si obtiene una respuesta técnicamente válida. Guarda las nuevas ejecuciones en `data/procesados/prueba_qwen_local_actual.json` para no sobrescribir la referencia original. No cambia de modelo ni descarga nada. Puede consumir una parte importante de la RAM; no se detienen otras aplicaciones automáticamente.
 
 Para configurar explícitamente los límites:
 
@@ -58,7 +96,7 @@ Para configurar explícitamente los límites:
 Para repetir verificando el mismo modelo de una ejecución anterior, antes de sobrescribir el informe:
 
 ```powershell
-$digestPrueba = (Get-Content .\data\procesados\prueba_qwen_local.json -Raw -Encoding UTF8 | ConvertFrom-Json).entorno_inicial.modelo.digest
+$digestPrueba = (Get-Content .\data\procesados\prueba_qwen_local_actual.json -Raw -Encoding UTF8 | ConvertFrom-Json).entorno_inicial.modelo.digest
 .\.venv\Scripts\python.exe -m src.prueba_qwen_local --digest $digestPrueba
 ```
 
@@ -68,11 +106,55 @@ La conexión está limitada a `http://127.0.0.1:11434`, sin proxies ni redirecci
 
 El único catálogo enviado contiene `id` y `objetivo`. Se guarda su huella y se verifica que no tenga otros campos. Los nombres se recuperan con código después de validar la respuesta y no se envían en la repetición. La petición y los objetivos se separan de las instrucciones y se tratan como datos.
 
-La respuesta se solicita mediante el esquema JSON del parámetro `format` de la [API local de chat de Ollama](https://docs.ollama.com/api/chat). Contiene `estado`, `objetivo_interpretado`, `pregunta_aclaracion` y `medidas`; cada selección tiene `id`, `justificacion` y `evidencia_objetivo`. Se validan estructura y tipos, IDs únicos existentes, evidencia literal del objetivo de cada ID y coherencia entre estado, aclaración y lista. No se solicita ni guarda razonamiento interno.
+La respuesta se solicita mediante el esquema JSON del parámetro `format` de la [API local de chat de Ollama](https://docs.ollama.com/api/chat). Contiene `estado`, `objetivo_interpretado`, `pregunta_aclaracion` y `medidas`; cada selección tiene `id`, `justificacion`, `evidencia_objetivo`, `tipo_coincidencia` y `condicion`. Se validan estructura y tipos, IDs únicos existentes, evidencia literal del objetivo de cada ID, coherencia entre estado, aclaración y lista, y coherencia entre tipo y condición. No se solicita ni guarda razonamiento interno.
+
+Las instrucciones `seleccion_objetivos_v2` comparan el significado de la petición con todos los objetivos. No exigen coincidencia literal, un objetivo principal único ni un máximo de resultados. Una candidata es `directa` si su objetivo respalda la necesidad y `condicionada` si requiere una condición que no figura en la petición ni en ese objetivo. Una coincidencia condicionada no representa una relación entre medidas. Las coincidencias temáticas se excluyen y los efectos no se completan con conocimiento externo.
+
+## Evaluar la selección v2
+
+La batería acordada ejecuta una sola vez cuatro peticiones: dos formulaciones sobre reducción del coche individual, una petición de movilidad demasiado amplia y una petición ajena a movilidad. Usa la misma configuración local comprobada y no envía al modelo los resultados esperados ni los criterios de evaluación.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.evaluar_seleccion_v2
+```
+
+Para exigir exactamente el modelo empleado en la evaluación registrada:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.evaluar_seleccion_v2 --digest 07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522
+```
+
+El resultado queda en `data/procesados/evaluacion_seleccion_v2.json`, excluido de Git. Incluye versión y huella de instrucciones, configuración, métricas, respuestas validadas y comparación automática. También comprueba mediante SHA-256 que `prueba_qwen_local.json` no cambia.
+
+La primera evaluación v2 completó las cuatro inferencias sin errores técnicos ni truncamiento, pero solo superó tres de seis comprobaciones funcionales. Conservó las siete coincidencias ya aceptadas y excluyó correctamente como directa la medida que solo reduce emisiones; siguió omitiendo las tres coincidencias semánticas identificadas en la revisión, no utilizó la categoría condicionada y respondió con resultados ante una petición que requería aclaración. El caso ajeno a movilidad devolvió correctamente `sin_coincidencias`. Este resultado no valida la calidad general ni justifica ajustar reiteradamente el prompt contra esta batería.
+
+## Referencia histórica del flujo v3
+
+La evaluación v3 ejecutó cinco casos con lotes de ocho medidas. Se conserva como referencia del enfoque anterior y no debe repetirse ni sobrescribirse.
+
+El informe privado se guarda en `data/procesados/evaluacion_seleccion_v3.json`. Registra todas las evaluaciones por medida, cobertura, intentos, tiempos, configuración, versiones de instrucciones, modelo y digest.
+
+La primera pasada v3 superó dos de nueve comprobaciones funcionales. C pidió aclaración y la integró correctamente; D cubrió los 38 IDs y terminó sin coincidencias. A y B agotaron el reintento en dos lotes, y C en uno, porque Qwen devolvió evidencias que no eran fragmentos literales del objetivo correspondiente. Esos tres casos quedaron incompletos y no generan listas definitivas. E no pidió la aclaración esperada antes de seleccionar. No se repitió la evaluación ni se relajó la validación para mejorar artificialmente el resultado.
+
+## Evaluación exhaustiva v5 pendiente y referencia histórica v4
+
+El módulo `src.evaluar_seleccion_v4` conserva su nombre, pero usa el flujo vigente y escribirá `data/procesados/evaluacion_seleccion_v5.json`. Rechaza la ejecución si ese archivo existe, preservando los informes anteriores. No ejecutar todavía A–E: esta revisión se limita a código, documentación y pruebas simuladas. Sus comprobaciones semánticas mínimas no sustituyen la revisión humana de todas las decisiones, incluidos los descartes.
+
+Los párrafos siguientes describen la primera evaluación histórica v4. Su contrato era solo de candidatas y ya no es el contrato vigente.
+
+El evaluador v4 usa una sola consulta completa por necesidad, conserva los informes previos y registra entradas, salidas validadas, candidatas, configuración, modelo, digest, tiempos e integridad de los archivos.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.evaluar_seleccion_v4 --digest 07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522
+```
+
+La pasada aprobada ya se ejecutó una vez y quedó en `data/procesados/evaluacion_seleccion_v4.json`. Las cinco comparaciones fueron técnicamente válidas, incluyeron los 38 pares `id`/`objetivo` y no tuvieron errores ni truncamientos. C pidió e integró una aclaración; E no pidió la aclaración esperada. Qwen devolvió `sin_coincidencias` en A, B, C, D y E. Por tanto, A y B no produjeron candidatas altas ni parciales y no recuperaron MED-005, MED-024 o MED-030. El resultado automático fue seis de nueve comprobaciones, debido principalmente a que la lista vacía también cumple las exclusiones de MED-018 y MED-029; no representa una calidad semántica aceptable.
+
+La suma de tiempos de los cinco casos bajó de aproximadamente 1.079 segundos en v3 a 102 segundos en v4. La comparación propiamente dicha pasó de unos 1.018 segundos a 45 segundos. Esta mejora de rendimiento no valida la selección semántica.
 
 El contexto se comprueba con una cota conservadora basada en bytes UTF-8, válida para el tokenizador BPE de bytes verificado en los metadatos, más margen de plantilla y reserva de generación. No es una tokenización exacta y puede rechazar contextos que en realidad cabrían. Nunca elimina objetivos para ajustarlos. No se utiliza automáticamente el contexto máximo del modelo.
 
-`data/procesados/prueba_qwen_local.json` contiene metadatos y digest, modelos cargados, configuración, huella del catálogo, resultados validados y métricas que proporciona Ollama. Los tiempos de carga y generación se convierten de nanosegundos a segundos. La medición de hardware adjunta conserva su fecha: al repetir, no debe interpretarse como memoria libre actual. El informe se reemplaza en cada ejecución; copiarlo dentro de `data/procesados/` si se quieren conservar comparaciones.
+`data/procesados/prueba_qwen_local.json` se conserva como referencia original. `evaluacion_seleccion_v2.json` contiene la evaluación posterior. Ambos registran metadatos, digest, configuración, huella del catálogo, resultados validados y métricas proporcionadas por Ollama. Los tiempos de carga y generación se convierten de nanosegundos a segundos. La medición de hardware adjunta conserva su fecha y no representa la memoria libre actual.
 
 Errores de servicio, modelo ausente, memoria insuficiente, tiempo agotado, contexto insuficiente, truncamiento y respuesta inválida son fallos explícitos (salida 1), nunca «sin coincidencias». Tras agotar el tiempo se cierra la conexión y no se repite la inferencia; la liberación de recursos depende de Ollama y no se fuerza la detención de procesos. La permanencia solicitada del modelo en memoria es de cinco minutos.
 
@@ -128,6 +210,6 @@ Los recuentos revisados se han contrastado localmente; no son límites del progr
 
 Se valida y serializa todo antes de reemplazar salidas. Ante errores de escritura se intenta restaurar los archivos anteriores. Cada reemplazo es atómico, pero el conjunto no es una transacción frente a un corte eléctrico: ejecutar una sola importación cada vez.
 
-No guardar credenciales ni documentación privada en el control de versiones. `.env.example`, si se crea, contendrá únicamente ejemplos sin secretos. No se han creado remotos ni publicado archivos.
+No guardar credenciales ni documentación privada en el control de versiones. `.env.example`, si se crea, contendrá únicamente ejemplos sin secretos. Este trabajo no modifica repositorios remotos ni publica archivos.
 
 Consultar las etapas en [docs/plan_trabajo.md](docs/plan_trabajo.md).

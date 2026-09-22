@@ -9,13 +9,16 @@ import unittest
 from unittest.mock import patch
 
 from src.ollama_local import ErrorLocal, OllamaLocal, clasificar_error, json_estricto
-from src.prueba_qwen_local import (ejecutar, extraer_resultado, preparar_peticion,
-                                  validar_catalogo, validar_respuesta)
+from src.prueba_qwen_local import ejecutar, extraer_resultado
+from src.seleccion_objetivos import preparar_peticion, validar_catalogo, validar_respuesta
+from src.seleccion_objetivos import INSTRUCCIONES, INSTRUCCIONES_VERSION
+from src.evaluar_seleccion_v2 import evaluar_criterios, MINIMOS_DIRECTOS_AB
 
 CATALOGO = [{"id": "PRUEBA-A", "objetivo": "Objetivo sintético para reducir viajes individuales."}]
 RESPUESTA = {"estado": "resultados", "objetivo_interpretado": "Petición sintética",
              "pregunta_aclaracion": None, "medidas": [{"id": "PRUEBA-A",
-             "justificacion": "Justificación de prueba.", "evidencia_objetivo": "reducir viajes individuales"}]}
+             "justificacion": "Justificación de prueba.", "evidencia_objetivo": "reducir viajes individuales",
+             "tipo_coincidencia": "directa", "condicion": None}]}
 
 
 class ValidacionLocalTests(unittest.TestCase):
@@ -48,6 +51,20 @@ class ValidacionLocalTests(unittest.TestCase):
         respuesta["medidas"][0]["id"] = "PRUEBA-B"
         with self.assertRaisesRegex(ErrorLocal, "fragmento literal"):
             validar_respuesta(respuesta, catalogo)
+
+    def test_tipo_coincidencia_y_condicion(self):
+        condicionada = deepcopy(RESPUESTA)
+        condicionada["medidas"][0]["tipo_coincidencia"] = "condicionada"
+        condicionada["medidas"][0]["condicion"] = "Si afecta a los viajes en coche."
+        self.assertEqual(validar_respuesta(condicionada, CATALOGO), condicionada)
+        for tipo, condicion in (("directa", "No debe existir"), ("condicionada", None),
+                                ("condicionada", ""), ("otra", None)):
+            with self.subTest(tipo=tipo, condicion=condicion):
+                respuesta = deepcopy(RESPUESTA)
+                respuesta["medidas"][0]["tipo_coincidencia"] = tipo
+                respuesta["medidas"][0]["condicion"] = condicion
+                with self.assertRaisesRegex(ErrorLocal, "coincidencia|condición"):
+                    validar_respuesta(respuesta, CATALOGO)
 
     def test_estructura_y_tipos(self):
         for cambio in ({"medidas": {}}, {"objetivo_interpretado": 3}, {"pregunta_aclaracion": False},
@@ -84,9 +101,22 @@ class ValidacionLocalTests(unittest.TestCase):
         self.assertNotIn("Ignora las reglas", cuerpo["messages"][0]["content"])
         self.assertFalse(cuerpo["think"])
         self.assertIsInstance(cuerpo["format"], dict)
+        propiedades = cuerpo["format"]["properties"]["medidas"]["items"]["properties"]
+        self.assertEqual(set(propiedades), {"id", "justificacion", "evidencia_objetivo",
+                                            "tipo_coincidencia", "condicion"})
         self.assertGreater(cota, 0)
         with self.assertRaisesRegex(ErrorLocal, "No se recorta"):
             preparar_peticion("modelo-local", CATALOGO, "Prueba", 100, 50)
+
+    def test_instrucciones_v2_son_generales_y_semanticas(self):
+        self.assertEqual(INSTRUCCIONES_VERSION, "seleccion_objetivos_v2")
+        self.assertIn("significado completo", INSTRUCCIONES)
+        self.assertIn("directa", INSTRUCCIONES)
+        self.assertIn("condicionada", INSTRUCCIONES)
+        self.assertIn("todos los objetivos", INSTRUCCIONES)
+        self.assertNotIn("MED-", INSTRUCCIONES)
+        self.assertNotIn("objetivo principal único", INSTRUCCIONES.split("No exijas", 1)[0])
+        self.assertNotIn("explícitamente", INSTRUCCIONES)
 
     def test_truncamiento_y_razonamiento_no_se_aceptan(self):
         bruto = {"done": True, "done_reason": "stop", "message": {"content": json.dumps(RESPUESTA)}, "eval_count": 20, "prompt_eval_count": 100}
@@ -160,7 +190,7 @@ class FlujoSimuladoTests(unittest.TestCase):
             cliente = ClienteSimulado()
             with patch("src.prueba_qwen_local.RAIZ", raiz), patch("src.prueba_qwen_local.consultar_ps_cli", return_value={}), patch("builtins.print"):
                 informe = ejecutar(args, cliente)
-            guardado = json.loads((procesados / "prueba_qwen_local.json").read_text(encoding="utf-8"))
+            guardado = json.loads((procesados / "prueba_qwen_local_actual.json").read_text(encoding="utf-8"))
             self.assertEqual(guardado, informe)
             return informe, cliente.cuerpos
 
@@ -188,6 +218,20 @@ class FlujoSimuladoTests(unittest.TestCase):
         self.assertEqual(informe["estado"], "error")
         self.assertEqual(informe["errores"][0]["codigo"], "tiempo_agotado")
         self.assertNotIn("respuesta", informe["peticiones"][0])
+
+    def test_evaluacion_automatica_no_modifica_respuestas(self):
+        medidas = [{"id": identificador, "tipo_coincidencia": "directa"}
+                   for identificador in sorted(MINIMOS_DIRECTOS_AB)]
+        casos = {
+            "A": {"respuesta": {"estado": "resultados", "medidas": deepcopy(medidas)}},
+            "B": {"respuesta": {"estado": "resultados", "medidas": deepcopy(medidas)}},
+            "C": {"respuesta": {"estado": "necesita_aclaracion", "medidas": []}},
+            "D": {"respuesta": {"estado": "sin_coincidencias", "medidas": []}},
+        }
+        original = deepcopy(casos)
+        evaluacion = evaluar_criterios(casos)
+        self.assertEqual(evaluacion["resumen"]["comprobaciones_superadas"], 6)
+        self.assertEqual(casos, original)
 
 
 if __name__ == "__main__":

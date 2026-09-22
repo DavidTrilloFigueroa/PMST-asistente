@@ -183,7 +183,7 @@ class ExcelTests(unittest.TestCase):
         self.assertEqual(medidas[0]["objetivo"], datos()[0][0]["objetivo"])
         self.assertIsNone(medidas[0]["fases_implementacion"])
         self.assertEqual(medidas[0]["fuente"]["fila"], 2)
-        self.assertEqual(medidas[0]["fuente"]["columnas"]["id"], "I")
+        self.assertEqual(medidas[0]["fuente"]["columnas"]["id"], "H")
         self.assertEqual(antes, huellas(self.entrada))
 
     def test_error_no_sustituye_catalogo_previo(self):
@@ -191,7 +191,7 @@ class ExcelTests(unittest.TestCase):
         anteriores = {p.name: p.read_bytes() for p in self.salida.glob("*.json") if p.name != "informe_validacion.json"}
         archivo = self.entrada / MEDIDAS
         libro = load_workbook(archivo)
-        libro["Hoja1"].cell(3, 9).value = "MED-TEST-A"
+        libro["Hoja1"].cell(3, 8).value = "MED-TEST-A"
         libro.save(archivo)
         libro.close()
         informe = importar(self.entrada, self.salida)
@@ -225,8 +225,8 @@ class ExcelTests(unittest.TestCase):
         libro = load_workbook(archivo)
         fases = "  2. Texto inicial\n\n1. Texto posterior  "
         ficha = "Texto sintético de ficha\nSin asociaciones documentadas"
-        libro["Hoja1"].cell(3, 5).value = fases
-        libro["Hoja1"].cell(3, 4).value = ficha
+        libro["Hoja1"].cell(3, 4).value = fases
+        libro["Hoja1"].cell(3, 3).value = ficha
         libro.save(archivo)
         libro.close()
         informe = importar(self.entrada, self.salida)
@@ -239,12 +239,42 @@ class ExcelTests(unittest.TestCase):
     def test_encabezado_requerido_ausente(self):
         archivo = self.entrada / MEDIDAS
         libro = load_workbook(archivo)
-        libro["Hoja1"].cell(1, 9).value = "ENCABEZADO_INCORRECTO"
+        libro["Hoja1"].cell(1, 8).value = "ENCABEZADO_INCORRECTO"
         libro.save(archivo)
         libro.close()
         informe = importar(self.entrada, self.salida)
         self.assertIn("columnas_ausentes", {e["codigo"] for e in informe["errores"]})
         self.assertFalse((self.salida / "medidas.json").exists())
+
+    def test_ocho_columnas_sin_resultados_se_importan_y_exportan(self):
+        # Cabecera independiente del esquema del importador: detecta que se
+        # reintroduzca accidentalmente la antigua columna obligatoria.
+        encabezados = ["ID", "Nombre medida", "Objetivo", "Descripción",
+                       "Fases de implementación", "KPI's Éxito/Eficacia",
+                       "Presupuesto", "Actores implicados"]
+        libro = Workbook()
+        hoja = libro.active
+        hoja.title = "Hoja1"
+        hoja.append(encabezados)
+        for medida in datos()[0]:
+            hoja.append([medida["id"], medida["nombre"], medida["objetivo"],
+                         medida["descripcion"], None, None, None, None])
+        libro.save(self.entrada / MEDIDAS)
+        libro.close()
+        antes = huellas(self.entrada)
+        informe = importar(self.entrada, self.salida)
+        self.assertEqual(informe["estado"], "correcto")
+        self.assertEqual(informe["errores"], [])
+        medidas = json.loads((self.salida / "medidas.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(medidas), 2)
+        campos = {"id", "nombre", "objetivo", "descripcion", "fases_implementacion",
+                  "kpis_texto_ficha", "presupuesto", "actores_implicados"}
+        for medida in medidas:
+            self.assertEqual(set(medida), campos | {"fuente"})
+            self.assertEqual(set(medida["fuente"]["columnas"]), campos)
+            self.assertNotIn("resultados", medida)
+        self.assertFalse(any(d["campo"] == "resultados" for d in informe["datos_ausentes"]))
+        self.assertEqual(antes, huellas(self.entrada))
 
     def test_archivo_ausente_genera_informe(self):
         (self.entrada / MEDIDAS).unlink()
