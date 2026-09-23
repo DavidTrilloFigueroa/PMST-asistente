@@ -4,7 +4,7 @@ Herramienta para elegir y consultar medidas de planes de movilidad sostenible al
 
 ## Estado actual
 
-MVP completamente local. La consulta guiada interpreta la petición, solicita aclaraciones y exige una evaluación explícita de cada objetivo elegible en una sola selección v5. El catálogo actual tiene 38 medidas: MED-036 se conserva documentalmente y se excluye del envío, dejando 37 objetivos elegibles. Usa Ollama y `qwen3.6:latest`. Sin interfaz gráfica, acceso por internet ni seguimiento operativo. La evaluación real A–E de v5 sigue pendiente de autorización.
+MVP completamente local. La consulta guiada interpreta la petición, solicita aclaraciones y exige una evaluación explícita de cada objetivo elegible en una sola selección v5. El catálogo actual tiene 38 medidas: MED-036 se conserva documentalmente y se excluye del envío, dejando 37 objetivos elegibles. Usa Ollama y `qwen3.6:latest`. Sin interfaz gráfica, acceso por internet ni seguimiento operativo. Las 59 pruebas automáticas pasan; el siguiente paso acordado es la primera evaluación semántica real A–E de v5.
 
 La búsqueda inicial recibirá exclusivamente identificadores y objetivos. Solo después de validar las candidatas se consultarán sus detalles. Las fases de las medidas seleccionadas se presentarán por separado y en su orden original.
 
@@ -138,7 +138,7 @@ La primera pasada v3 superó dos de nueve comprobaciones funcionales. C pidió a
 
 ## Evaluación exhaustiva v5 pendiente y referencia histórica v4
 
-El módulo `src.evaluar_seleccion_v4` conserva su nombre, pero usa el flujo vigente y escribirá `data/procesados/evaluacion_seleccion_v5.json`. Rechaza la ejecución si ese archivo existe, preservando los informes anteriores. No ejecutar todavía A–E: esta revisión se limita a código, documentación y pruebas simuladas. Sus comprobaciones semánticas mínimas no sustituyen la revisión humana de todas las decisiones, incluidos los descartes.
+El módulo `src.evaluar_seleccion_v4` conserva su nombre, pero usa el flujo vigente y escribirá `data/procesados/evaluacion_seleccion_v5.json`. Rechaza la ejecución si ese archivo existe, preservando los informes anteriores. La primera ejecución real A–E es el siguiente paso de trabajo; aún no se ha realizado. Debe ser una sola pasada, sin cambios de prompt ni repeticiones después de ver los resultados. Sus comprobaciones automáticas no sustituyen la revisión humana de todas las decisiones, incluidos los descartes.
 
 Los párrafos siguientes describen la primera evaluación histórica v4. Su contrato era solo de candidatas y ya no es el contrato vigente.
 

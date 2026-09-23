@@ -22,7 +22,7 @@
 - Validar cobertura exacta de los IDs enviados, sin omitidos, duplicados, desconocidos ni MED-036. `resultados` exige al menos una alta o parcial; `sin_coincidencias` exige todas las evaluaciones descartar, nunca una lista vacía. Una respuesta inválida, truncada o fallida no produce resultados ni se reintenta. El código deriva altas, parciales y descartadas; solo muestra altas y parciales.
 - El código ordena las altas por ID y después las parciales por ID. Solo tras validar la respuesta recupera de los catálogos locales el nombre y el objetivo documentado de cada candidata.
 - Registrar resultados y métricas en `data/procesados/prueba_qwen_local.json`, excluido de Git. Distinguir ejecución del modelo, validez técnica y calidad de selección pendiente de revisión humana.
-- Conservar los informes anteriores. Una futura evaluación exhaustiva se guardará en `evaluacion_seleccion_v5.json`, sin sobrescribirlo si existe. No ajustar repetidamente el prompt ni repetir inferencias para forzar los resultados de una batería concreta. La implementación v5 no autoriza ejecutar todavía A–E.
+- Conservar los informes anteriores. La primera evaluación real exhaustiva se guardará en `evaluacion_seleccion_v5.json`, sin sobrescribirlo si existe. No ajustar repetidamente el prompt ni repetir inferencias para forzar los resultados de una batería concreta. No se ha ejecutado todavía: es el siguiente paso de trabajo acordado para una futura sesión.
 - Ejecutar comandos con `.venv/Scripts/python.exe`, sin cambiar la política de ejecución de PowerShell. Registrar dependencias en `requirements.txt` y usar `unittest`.
 - Se permiten datos sintéticos únicamente en pruebas aisladas; nunca incorporarlos al catálogo real.
 
@@ -71,9 +71,10 @@ La información ausente se muestra como «No consta en la documentación». En l
 - Importador y catálogos estructurados: completados. El catálogo actual contiene 38 registros, sin convertir ese recuento en un límite permanente.
 - Flujo vigente: `src/consulta_guiada.py` con interpretación v1 y comparación v5 exhaustiva en una sola consulta de todos los elegibles; entrada por `src/consulta_terminal.py`.
 - Evaluador: `src/evaluar_seleccion_v4.py` conserva su nombre histórico, pero la siguiente salida es v5 y no sobrescribe evaluaciones. Todos los informes previos son referencias históricas.
-- Validación automática: 50 pruebas superadas el 22 de septiembre de 2026.
-- Primera y única pasada real v4: cinco comparaciones técnicamente válidas, sin errores, truncamiento ni cambios en originales o informes previos. C pidió e integró una aclaración; E no la pidió. Qwen devolvió `sin_coincidencias` en los cinco casos, por lo que A y B no recuperaron ninguna candidata y la calidad semántica no está validada.
-- Siguiente decisión pendiente: analizar de forma general por qué la salida v4 queda vacía, usando la pasada registrada y nuevos casos independientes cuando se autoricen. No repetir ni ajustar la misma batería para perseguir sus resultados esperados.
+- Validación automática vigente: 59 pruebas superadas el 22 de septiembre de 2026. Incluyen cobertura exhaustiva, rechazo de IDs omitidos, duplicados, desconocidos y excluidos, derivación y orden de grupos, recuperación local, consulta única y reproducibilidad. No se realizó inferencia real durante esta validación.
+- Historial v4 conservado: la pasada inicial devolvió listas vacías; las revisiones semánticas posteriores recuperaron candidatas, pero mostraron omisiones, categorías incorrectas y condiciones no respaldadas. Los informes históricos no validan la calidad de v5 y no deben repetirse ni sobrescribirse.
+- Siguiente paso acordado: ejecutar una primera evaluación semántica real de v5 con Qwen local y revisión exhaustiva de los 37 objetivos elegibles en los casos A–E. Debe ser una sola pasada, sin reintentos ni cambios de prompt posteriores para perseguir resultados, guardada en `data/procesados/evaluacion_seleccion_v5.json`.
+- En esa primera evaluación v5 comprobar especialmente: cobertura de las 37 evaluaciones, exclusión efectiva de MED-036, ausencia de truncamiento con los límites actuales, coherencia técnica, pertinencia de altas y parciales, respaldo documental de las condiciones y calidad de los descartes. Separar resultado técnico, resultado semántico y revisión humana.
 
 ## Validación futura
 
