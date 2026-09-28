@@ -1,6 +1,6 @@
 # Estado de PMST Asistente
 
-Actualizado el 22 de septiembre de 2026. Este archivo permite retomar el proyecto en otro chat sin depender del historial de conversación.
+Actualizado el 28 de septiembre de 2026. Este archivo permite retomar el proyecto sin depender del historial de conversación.
 
 ## Cómo reanudar el trabajo
 
@@ -8,123 +8,111 @@ Leer, en este orden:
 
 1. `AGENTS.md`: reglas obligatorias, separación de datos y alcance.
 2. Este archivo: estado técnico, resultados y trabajo pendiente.
-3. `README.md`: comandos y estructura del proyecto.
-4. `docs/plan_trabajo.md`: etapas y flujo funcional acordado.
+3. `README.md`: instalación, comandos y estructura.
+4. `docs/plan_trabajo.md`: etapas y próximos pasos.
 
-Después, inspeccionar el código afectado antes de editar. No volver a ejecutar evaluaciones históricas ni modificar los Excel o `objetivos_busqueda.json` sin una petición expresa.
+Inspeccionar después solo el código afectado. No repetir evaluaciones históricas, regenerar catálogos ni modificar los Excel sin una petición expresa.
 
 ## Objetivo y límites
 
-PMST Asistente ayuda a elegir medidas de planes de movilidad sostenible al trabajo a partir de documentación local. La selección inicial solo puede usar el objetivo interpretado del usuario y los campos `id` y `objetivo` del catálogo. Los nombres y otros datos se consultan después de validar las candidatas.
+PMST Asistente selecciona y consulta medidas de movilidad sostenible al trabajo a partir de documentación local. La selección inicial utiliza exclusivamente el objetivo interpretado y los pares `id`/`objetivo`. Los nombres, descripciones, KPIs, relaciones, actores, presupuestos y fases se recuperan localmente después de validar las candidatas.
 
-El MVP usa exclusivamente Ollama en `http://127.0.0.1:11434` con `qwen3.6:latest`. No usa servicios externos, no descarga modelos y no tiene todavía interfaz gráfica. Tampoco incluye seguimiento operativo de la implementación.
+El MVP funciona en local con Ollama en `http://127.0.0.1:11434`, `qwen3.6:latest`, terminal y una interfaz web Streamlit. No usa inferencia externa, cuentas, base de datos, historial persistente, exportación ni seguimiento operativo de la implantación.
 
 ## Estado funcional
 
-- Importación de los tres Excel, validación documental, trazabilidad y catálogos JSON: completadas.
-- Catálogo actual: 38 medidas. El programa no impone ese número como límite permanente.
-- Interpretación de la necesidad y aclaraciones acumuladas: implementadas en terminal.
-- Selección v5 exhaustiva: una única consulta con todos los objetivos elegibles. MED-036 permanece en el catálogo documental y se excluye del envío; actualmente 37 elegibles de 38 registros, sin límite permanente.
-- Presentación actual: nombre, ID, coincidencia, justificación, condición y objetivo documental.
-- Fichas completas con descripción, relaciones y KPIs: pendientes.
-- Selección visual y desplegables de actores, presupuesto y fases: pendientes.
-
-El flujo aprobado completo permanece en `AGENTS.md` y `docs/plan_trabajo.md`.
+- Importación, validación, trazabilidad y catálogos JSON de los tres Excel: completados.
+- Catálogo actual: 38 medidas; MED-036 se conserva documentalmente y se excluye de la búsqueda. Actualmente se envían 37 objetivos elegibles, sin fijar ese recuento como límite.
+- Interpretación y aclaraciones acumuladas: implementadas.
+- Comparación v5 exhaustiva: una consulta, temperatura 0, semilla 42, pensamiento desactivado y una decisión por cada objetivo elegible.
+- Presentación local: implementada en terminal y Streamlit.
+- Tarjetas: altas antes que parciales, descripción documental breve, objetivo y KPIs asociados.
+- Selección: uno o varios IDs en terminal y casillas persistentes durante la sesión web.
+- Detalle: actores, presupuesto y fases documentales por medida, respetando el orden original.
+- Relaciones: solo entre medidas seleccionadas, respetando dirección y simetría documental, sin inversas dirigidas ni transitividad.
+- Ausencias: `No consta en la documentación`.
+- Interfaz web: conversación con historial de sesión, aclaraciones, tarjetas, selección, detalles, relaciones y reinicio mediante `Nueva consulta`.
 
 ## Implementación vigente
 
-- `src/consulta_guiada.py`: interpretación v1 y comparación `comparacion_objetivos_v5_exhaustiva`; cobertura exacta, validación y recuperación local posterior.
-- `src/consulta_terminal.py`: conversación interactiva en PowerShell.
-- `src/evaluar_seleccion_v4.py`: conserva el nombre histórico; la primera evaluación real exhaustiva escribirá `evaluacion_seleccion_v5.json` y rechazará sobrescribirla.
-- `tests/test_consulta_guiada.py`: pruebas sintéticas de cobertura completa, exclusión, grupos, presentación, validación y consulta única.
+- `src/consulta_guiada.py`: núcleo de interpretación v1 y comparación `comparacion_objetivos_v5_exhaustiva`.
 - `src/ollama_local.py`: cliente restringido a Ollama local y errores diferenciados.
+- `src/consulta_terminal.py`: flujo interactivo completo por terminal.
+- `src/presentacion_terminal.py`: lógica local reutilizable de descripción breve, catálogos de presentación, selección y relaciones.
+- `src/app_web.py`: frontend local Streamlit; reutiliza el núcleo y la presentación local, conserva el historial durante la sesión y no inicializa Ollama hasta el primer mensaje.
 - `src/importar_catalogo.py`: importador y validación documental.
+- `src/evaluar_seleccion_v4.py`: nombre histórico del evaluador usado para el flujo vigente.
+- `tests/test_consulta_guiada.py` y `tests/test_presentacion_terminal.py`: pruebas sintéticas sin Ollama.
 
-`src/seleccion_objetivos.py`, `src/prueba_qwen_local.py`, `src/evaluar_seleccion_v2.py` y `src/evaluar_seleccion_v3.py` documentan flujos anteriores. Sus informes se conservan y no se deben sobrescribir.
+Los módulos de selección y evaluación v2/v3 se conservan como referencia histórica y no forman parte del flujo vigente.
 
 ## Reglas de la comparación v5
 
-La única solicitud de comparación contiene:
+La comparación recibe el objetivo interpretado y todos los objetivos elegibles de `objetivos_busqueda.json`, exclusivamente como `id` y `objetivo`. Qwen devuelve `estado` y `evaluaciones`, con una entrada por ID enviado y los campos `id`, `decision`, `justificacion` y `condicion_o_limite`.
 
-- El objetivo interpretado.
-- Todos los registros elegibles de `objetivos_busqueda.json`, excluyendo MED-036 en memoria, con solo `id` y `objetivo`.
+- `alta`: justificación no vacía y condición `null`.
+- `parcial`: justificación y condición o límite no vacíos.
+- `descartar`: justificación y condición `null`.
+- `resultados`: al menos una alta o parcial.
+- `sin_coincidencias`: todas las evaluaciones son descartes.
 
-Qwen devuelve `estado` y `evaluaciones`, con exactamente una entrada por ID elegible. Campos: `id`, `decision`, `justificacion` y `condicion_o_limite`. Alta exige justificación y condición null; parcial exige justificación y condición expresamente documentada; descartar exige ambos textos null. `resultados` exige alguna alta o parcial; `sin_coincidencias` exige todas descartadas. No se permite lista de candidatas separada en la respuesta del modelo.
+El programa rechaza omitidos, duplicados, IDs desconocidos, MED-036, truncamientos y estados o campos incoherentes. No reintenta la comparación ni convierte errores en `sin_coincidencias`. Las candidatas se ordenan por ID dentro de altas y parciales; después se recupera la documentación local.
 
-Qwen no copia objetivos ni evidencias literales. El programa rechaza omitidos, duplicados, IDs no enviados y MED-036, deriva altas/parciales/descartadas y solo recupera nombre y objetivo local para altas y parciales. La presentación existente conserva `coincidencia` mediante adaptación por código. Se ordenan altas por ID y después parciales por ID. Una respuesta inválida, truncada o fallida no genera resultados ni se reintenta.
+## Evaluación semántica real v5
 
-Temperatura 0 y semilla 42 en interpretación y selección; pensamiento desactivado. Contexto 16.384, generación 3.072 y espera 300 s permanecen configurables y acotados. Falta comprobar en una evaluación autorizada si la salida exhaustiva cabe en el presupuesto de generación; no se aumenta automáticamente ni se recorta el catálogo. La cobertura verificable no acredita pertinencia ni límites semánticos: esto sigue requiriendo revisión humana.
+La primera evaluación real exhaustiva se ejecutó el 23 de septiembre de 2026 en una única pasada A–E, sin reintentos ni cambios posteriores del prompt. El primer intento con Ollama apagado se conserva como antecedente. La ejecución válida se guardó sin sobrescribirlo en:
 
-## Verificación automática vigente
+- `data/procesados/evaluacion_seleccion_v5_real_01.json`.
+- `docs/informe_evaluacion_v5_real_01.md`.
+- `docs/anexo_evaluacion_v5_real_01.md`.
 
-El 22 de septiembre de 2026 pasaron 59 pruebas automáticas, sin inferencia real, con:
+Resultado técnico:
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
+- A–D cubrieron exactamente los 37 IDs elegibles y excluyeron MED-036.
+- Todas las comparaciones fueron técnicamente válidas, terminaron normalmente y usaron una sola consulta.
+- D produjo `sin_coincidencias` con 37 descartes.
+- E pidió una aclaración concreta y no comparó antes de recibirla.
+- C pidió aclaración, integró la respuesta exacta y comparó después.
 
-La verificación preparó el cuerpo de selección sin enviarlo a Ollama y confirmó:
+Resultado semántico:
 
-- 38 registros documentales y 37 objetivos elegibles.
-- MED-036 no aparece en el mensaje destinado a Qwen.
-- Cada objeto enviado contiene exclusivamente `id` y `objetivo`.
-- Temperatura 0, semilla 42 y pensamiento desactivado.
-- Cobertura exacta exigida por esquema y por validación posterior.
-- Rechazo de omitidos, duplicados, IDs desconocidos, MED-036 y estados o campos incoherentes.
-- Derivación de altas, parciales y descartadas; presentación únicamente de altas y parciales, ordenadas por ID dentro de cada grupo.
-- Recuperación local posterior de nombre y objetivo documental.
-- Sin cambios en Excel, JSON generados, importador o presentación por terminal.
+- Mejoró la cobertura: A, B y C recuperaron las medidas directas esperadas MED-003, MED-004, MED-015, MED-023, MED-025, MED-026 y MED-030 como altas; MED-005 no se omitió y MED-024 apareció como parcial.
+- MED-028 se descartó correctamente.
+- Persistió una sobreselección importante. Qwen convirtió mecanismos plausibles en efectos documentados y clasificó como altas o parciales varias medidas cuyo objetivo no declara reducir específicamente el coche individual.
+- Entre los errores confirmados figuran altas indebidas de MED-001, MED-013, MED-020, MED-021, MED-022, MED-031 y, en algunos casos, MED-040; también parciales no respaldadas o insuficientemente limitadas de teletrabajo y movilidad compartida.
+- A produjo 20 candidatas; B y C, 29 cada una. La revisión exhaustiva hizo visible el criterio y redujo omisiones, pero no resolvió la precisión.
 
-La validación automática acredita el contrato y la mecánica, no la calidad semántica de las decisiones de Qwen.
+Conclusión: v5 es técnicamente trazable y útil para revisión, pero todavía no es un selector semántico fiable con revisión humana ligera. La barrera concreta es la inferencia de efectos no declarados a partir del mecanismo de una medida.
 
-## Historial de evaluaciones anteriores
+## Verificación disponible
 
-La primera pasada histórica v4 se guardó en `data/procesados/evaluacion_seleccion_v4.json`. Terminó sin errores técnicos ni truncamientos. Cada comparación fue una sola llamada con los 38 pares `id`/`objetivo`. Los Excel, `objetivos_busqueda.json` y los informes v2 y v3 conservaron sus huellas SHA-256.
+- La última suite completa documentada contiene 59 pruebas superadas el 22 de septiembre de 2026, sin inferencia real.
+- El 23 de septiembre se ejecutaron 4 pruebas afectadas por la presentación local: descripción breve, validación de selección, filtrado de relaciones y compatibilidad con el flujo guiado. Las cuatro pasaron.
+- Streamlit 1.64.0 se instaló en `.venv` y se añadió a `requirements.txt`.
+- `src/app_web.py` importó correctamente y Streamlit arrancó en modo headless en `http://localhost:8501`, sin consultar Qwen. Tras los últimos ajustes visuales y de historial, la importación volvió a completarse correctamente.
+- No se ha vuelto a ejecutar la suite completa después de añadir la presentación y la interfaz web.
 
-Resultados de la pasada:
+## Siguiente paso recomendado
 
-- A y B pasaron directamente a búsqueda, pero devolvieron `sin_coincidencias`.
-- C pidió una aclaración concreta, incorporó la respuesta y devolvió `sin_coincidencias`.
-- D, ajeno a movilidad, devolvió correctamente `sin_coincidencias`.
-- E no pidió la aclaración esperada sobre el problema de aparcamiento y devolvió `sin_coincidencias`.
-- A y B no produjeron candidatas altas o parciales. MED-005, MED-024 y MED-030 no se recuperaron.
-- La evaluación automática marcó 6 de 9 comprobaciones. Ese dato no acredita calidad: cuatro aciertos proceden de exclusiones que también satisface una lista vacía.
-
-Tiempos agregados:
-
-- v3 por lotes: aproximadamente 1.079 segundos para los cinco casos; 1.018 segundos correspondieron a comparaciones.
-- v4 en consulta única: aproximadamente 102 segundos para los cinco casos; 45 segundos correspondieron a comparaciones.
-
-Después se realizaron revisiones v4 conservadas en `evaluacion_seleccion_v4_revision_semantica.json` y `evaluacion_seleccion_v4_catalogo_actualizado.json`. Recuperaron candidatas, pero documentaron omisiones, categorías demasiado amplias y condiciones no respaldadas. Esos resultados motivaron el contrato exhaustivo v5 y no validan su calidad.
-
-## Siguiente paso acordado
-
-1. Ejecutar la primera evaluación semántica real de v5 con `qwen3.6:latest` sobre los casos A–E ya definidos. Debe ser una única pasada, sin lotes ni reintentos, y guardar un informe nuevo en `data/procesados/evaluacion_seleccion_v5.json`.
-2. Antes de inferir, comprobar modelo, digest, metadatos, catálogo actual y ausencia previa del archivo de salida. Durante la ejecución, registrar respuestas brutas, salidas procesadas, métricas y huellas, sin guardar razonamientos internos.
-3. Revisar por separado el resultado técnico y el semántico: cobertura de los 37 IDs, MED-036 excluida, ausencia de truncamiento, categorías, condiciones documentadas y descartes. La cobertura exhaustiva no equivale a calidad.
-4. No cambiar el prompt ni repetir A–E después de observar el resultado. Si aparecen problemas, informar y decidir una intervención posterior con casos independientes.
-5. Solo cuando la selección tenga calidad suficiente, construir las fichas documentales; después, la selección visual y los desplegables por medida.
-
-La primera evaluación real v5 no se ha ejecutado en esta sesión de actualización documental.
+1. Probar manualmente el flujo web completo con Ollama local: consulta directa, aclaración, historial visible, tarjetas, selección múltiple, detalles, relaciones y `Nueva consulta`.
+2. No repetir la batería A–E ni ajustar el prompt para perseguir sus resultados.
+3. Después de validar la interfaz, diseñar y evaluar con casos nuevos una intervención mínima sobre la frontera entre efecto documentado y efecto inferido, especialmente para `alta` y para las condiciones de `parcial`.
+4. Mantener fuera de alcance el seguimiento operativo, la publicación en internet y la persistencia de usuarios o conversaciones.
 
 ## Comandos habituales
 
-Consulta por terminal:
+Terminal:
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.consulta_terminal
 ```
 
-Consulta con petición inicial:
+Web local:
 
 ```powershell
-.\.venv\Scripts\python.exe -m src.consulta_terminal --peticion "Quiero reducir los viajes al trabajo en coche individual"
+.\.venv\Scripts\python.exe -m streamlit run src/app_web.py
 ```
 
-Regenerar catálogos, únicamente cuando corresponda revisar los Excel:
+Abrir `http://localhost:8501`. Ollama y `qwen3.6:latest` deben estar disponibles cuando se envíe el primer mensaje.
 
-```powershell
-.\.venv\Scripts\python.exe -m src.importar_catalogo
-```
-
-Los datos e informes privados están excluidos de Git. No publicar, crear repositorios remotos ni guardar credenciales.
+No se ha realizado ningún commit durante esta actualización.

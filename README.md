@@ -4,9 +4,9 @@ Herramienta para elegir y consultar medidas de planes de movilidad sostenible al
 
 ## Estado actual
 
-MVP completamente local. La consulta guiada interpreta la petición, solicita aclaraciones y exige una evaluación explícita de cada objetivo elegible en una sola selección v5. El catálogo actual tiene 38 medidas: MED-036 se conserva documentalmente y se excluye del envío, dejando 37 objetivos elegibles. Usa Ollama y `qwen3.6:latest`. Sin interfaz gráfica, acceso por internet ni seguimiento operativo. Las 59 pruebas automáticas pasan; el siguiente paso acordado es la primera evaluación semántica real A–E de v5.
+MVP completamente local. La consulta guiada interpreta la petición, solicita aclaraciones y exige una evaluación explícita de cada objetivo elegible en una sola selección v5. El catálogo actual tiene 38 medidas: MED-036 se conserva documentalmente y se excluye del envío, dejando 37 objetivos elegibles. Usa Ollama y `qwen3.6:latest`, con entrada por terminal y una primera interfaz web Streamlit. No incluye acceso público, persistencia ni seguimiento operativo.
 
-La búsqueda inicial recibirá exclusivamente identificadores y objetivos. Solo después de validar las candidatas se consultarán sus detalles. Las fases de las medidas seleccionadas se presentarán por separado y en su orden original.
+La evaluación real v5 completó correctamente la cobertura técnica y mejoró la recuperación de medidas directas, pero confirmó sobreselección semántica por inferir efectos no declarados desde mecanismos. La búsqueda inicial sigue recibiendo exclusivamente identificadores y objetivos. Solo después de validar las candidatas se consultan tarjetas, KPIs, detalles y relaciones locales.
 
 ## Estructura
 
@@ -20,12 +20,15 @@ La búsqueda inicial recibirá exclusivamente identificadores y objetivos. Solo 
 - `src/seleccion_objetivos.py`: instrucciones v2 versionadas, esquema JSON y validación de la selección.
 - `src/evaluar_seleccion_v2.py`: batería reproducible de cuatro casos, una inferencia por caso.
 - `src/consulta_guiada.py`: interpretación, validación y consulta única al catálogo completo del flujo vigente.
-- `src/consulta_terminal.py`: entrada interactiva por terminal.
+- `src/consulta_terminal.py`: entrada interactiva completa por terminal.
+- `src/presentacion_terminal.py`: presentación documental, selección y filtrado de relaciones reutilizables.
+- `src/app_web.py`: frontend local Streamlit con conversación, tarjetas, selección, detalles y relaciones.
 - `src/evaluar_seleccion_v3.py`: evaluación histórica del flujo anterior por lotes.
 - `src/evaluar_seleccion_v4.py`: evaluación vigente de la consulta única con cinco casos.
 - `tests/test_consulta_guiada.py`: pruebas sintéticas de aclaraciones, consulta única y validación de candidatas.
+- `tests/test_presentacion_terminal.py`: pruebas locales de descripción breve, selección y relaciones.
 - `tests/test_ollama_local.py`: respuestas simuladas, sin requerir Ollama.
-- `requirements.txt`: versiones utilizadas de openpyxl y et-xmlfile.
+- `requirements.txt`: dependencias fijadas, incluidas openpyxl y Streamlit.
 - `AGENTS.md`: instrucciones para Codex.
 - `ESTADO_PROYECTO.md`: resumen para reanudar el trabajo en otro chat.
 
@@ -67,7 +70,7 @@ También se puede aportar la primera petición en el comando:
 
 Qwen devuelve `estado` y `evaluaciones`: exactamente una por cada ID enviado. Cada evaluación contiene `id`, `decision` (`alta`, `parcial` o `descartar`), `justificacion` y `condicion_o_limite`. Alta y parcial exigen justificación; solo parcial admite y exige condición, expresamente respaldada por el objetivo. Descartar exige ambos textos null. `resultados` exige alguna alta o parcial; `sin_coincidencias` exige todas descartadas. No devuelve candidatas separadas ni copia objetivos o evidencias literales. Se rechazan omisiones, IDs repetidos/no enviados, MED-036 y estados o condiciones incoherentes, sin mostrar resultados ni reintentar.
 
-El código deriva altas, parciales y descartadas. Solo muestra altas primero y parciales después, ambas por ID. Tras validar toda la cobertura, recupera el nombre desde `medidas.json` y el objetivo documental desde `objetivos_busqueda.json`. La presentación conserva su campo `coincidencia`, adaptado por código desde `decision`; las descartadas no se muestran. Las fichas completas, relaciones, KPIs y fases todavía no se presentan.
+El código deriva altas, parciales y descartadas. Solo muestra altas primero y parciales después, ambas por ID. Tras validar toda la cobertura, recupera los datos documentales y presenta descripción breve, objetivo y KPIs. Después de la selección muestra actores, presupuesto, fases y exclusivamente las relaciones documentadas cuyos dos extremos estén seleccionados.
 
 Interpretación y selección usan temperatura 0, semilla 42 y `think: false`. Ya estaban configuradas así; ahora también se registran temperatura y semilla en los metadatos. Ayudan a reproducir, pero no garantizan salidas idénticas entre versiones o hardware. Contexto 16.384, generación 3.072 y espera 300 s permanecen configurables. La respuesta exhaustiva es más larga: su suficiencia y calidad están pendientes de evaluación real. Un truncamiento se rechaza, sin recortar el catálogo ni reintentar. La validación estructural no demuestra que una condición esté semánticamente respaldada por el documento.
 
@@ -76,6 +79,19 @@ Configuración explícita equivalente a la actual:
 ```powershell
 .\.venv\Scripts\python.exe -m src.consulta_terminal --modelo qwen3.6:latest --contexto 16384 --generacion 3072 --espera 300
 ```
+
+## Iniciar la interfaz web local
+
+1. Abrir Ollama y comprobar que `qwen3.6:latest` está disponible.
+2. Ejecutar desde la raíz:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run src/app_web.py
+```
+
+3. Abrir `http://localhost:8501`.
+
+La interfaz conserva durante la sesión actual la petición, aclaraciones, mensajes, candidatas y selección. `Nueva consulta` limpia ese estado. Ollama no se inicializa hasta que se envía el primer mensaje. No existe historial persistente entre reinicios.
 
 ## Prueba histórica de Qwen
 
@@ -102,7 +118,7 @@ $digestPrueba = (Get-Content .\data\procesados\prueba_qwen_local_actual.json -Ra
 
 El digest identifica el contenido instalado. Si la etiqueta apunta a otro digest, el programa se detiene; no restaura ni descarga el modelo anterior. Temperatura 0 y semilla fija ayudan a comparar, pero no garantizan resultados idénticos entre versiones de Ollama o hardware.
 
-La conexión está limitada a `http://127.0.0.1:11434`, sin proxies ni redirecciones. Se comprueba que el modelo sea GGUF local y no declare referencia remota. No se cambia la dirección de escucha de Ollama. La implementación usa exclusivamente la biblioteca estándar de Python y no añade dependencias.
+La conexión está limitada a `http://127.0.0.1:11434`, sin proxies ni redirecciones. Se comprueba que el modelo sea GGUF local y no declare referencia remota. No se cambia la dirección de escucha de Ollama. El cliente de Ollama usa la biblioteca estándar; la interfaz web añade Streamlit como dependencia local.
 
 El único catálogo enviado contiene `id` y `objetivo`. Se guarda su huella y se verifica que no tenga otros campos. Los nombres se recuperan con código después de validar la respuesta y no se envían en la repetición. La petición y los objetivos se separan de las instrucciones y se tratan como datos.
 
@@ -136,9 +152,11 @@ El informe privado se guarda en `data/procesados/evaluacion_seleccion_v3.json`. 
 
 La primera pasada v3 superó dos de nueve comprobaciones funcionales. C pidió aclaración y la integró correctamente; D cubrió los 38 IDs y terminó sin coincidencias. A y B agotaron el reintento en dos lotes, y C en uno, porque Qwen devolvió evidencias que no eran fragmentos literales del objetivo correspondiente. Esos tres casos quedaron incompletos y no generan listas definitivas. E no pidió la aclaración esperada antes de seleccionar. No se repitió la evaluación ni se relajó la validación para mejorar artificialmente el resultado.
 
-## Evaluación exhaustiva v5 pendiente y referencia histórica v4
+## Evaluación exhaustiva v5 y referencia histórica v4
 
-El módulo `src.evaluar_seleccion_v4` conserva su nombre, pero usa el flujo vigente y escribirá `data/procesados/evaluacion_seleccion_v5.json`. Rechaza la ejecución si ese archivo existe, preservando los informes anteriores. La primera ejecución real A–E es el siguiente paso de trabajo; aún no se ha realizado. Debe ser una sola pasada, sin cambios de prompt ni repeticiones después de ver los resultados. Sus comprobaciones automáticas no sustituyen la revisión humana de todas las decisiones, incluidos los descartes.
+El módulo `src.evaluar_seleccion_v4` conserva su nombre histórico. El primer intento v5, realizado con Ollama apagado, se conserva en `data/procesados/evaluacion_seleccion_v5.json`. La primera ejecución real válida A–E se guardó sin sobrescribirlo en `data/procesados/evaluacion_seleccion_v5_real_01.json`, con informe y anexo en `docs/`.
+
+La ejecución real cubrió exactamente los 37 objetivos elegibles en A–D, excluyó MED-036, no tuvo truncamientos ni reintentos y pidió las aclaraciones esperadas en C y E. D devolvió correctamente `sin_coincidencias`. A, B y C recuperaron las medidas directas principales, MED-005 y MED-024, pero produjeron entre 20 y 29 candidatas. La revisión humana confirmó falsas altas y parciales basadas en efectos inferidos. V5 mejora cobertura y trazabilidad, pero su precisión semántica todavía no permite una revisión humana ligera. No repetir A–E ni ajustar el prompt para perseguir esa batería; cualquier cambio posterior debe evaluarse con casos nuevos.
 
 Los párrafos siguientes describen la primera evaluación histórica v4. Su contrato era solo de candidatas y ya no es el contrato vigente.
 
@@ -194,11 +212,11 @@ Todos se guardan en `data/procesados/`, en UTF-8:
 | `asociaciones_medida_kpi.json` | ID de asociación, medida, KPI, nombres, tipo y subtipo, con procedencia. |
 | `informe_validacion.json` | Estado, recuentos, errores, advertencias, datos ausentes y huellas SHA-256 de los originales. |
 
-`fuente` conserva archivo, hoja, fila y columnas de cada campo. En el archivo de búsqueda se omite deliberadamente la procedencia: puede recuperarse por ID desde `medidas.json`. En el catálogo de KPIs, `fuentes` conserva todas sus apariciones. No se reescriben textos ni saltos de línea. Las fases siguen siendo texto original separado por medida. Las celdas vacías se guardan como `null`; la futura interfaz mostrará «No consta en la documentación». Las expresiones de ausencia escritas en las fichas se conservan literalmente.
+`fuente` conserva archivo, hoja, fila y columnas de cada campo. En el archivo de búsqueda se omite deliberadamente la procedencia: puede recuperarse por ID desde `medidas.json`. En el catálogo de KPIs, `fuentes` conserva todas sus apariciones. No se reescriben textos ni saltos de línea. Las fases siguen siendo texto original separado por medida. Las celdas vacías se guardan como `null`; las interfaces muestran «No consta en la documentación». Las expresiones de ausencia escritas en las fichas se conservan literalmente.
 
 Los indicadores asociados se recuperan únicamente de `Relaciones medidas-KPIs.xlsx`. El texto de KPI's Éxito/Eficacia de `MEDIDAS.xlsx` se conserva en `kpis_texto_ficha` y no genera asociaciones. El tipo y subtipo pertenecen a la asociación concreta.
 
-Las relaciones simétricas se reconocen por la dirección `Simétrica` de la leyenda. Se conserva el registro original y la futura consulta podrá acceder a él desde ambos extremos. Las relaciones `A → B` conservan su dirección. No se crean relaciones inversas dirigidas ni transitivas, ni se amplía automáticamente la lista de candidatas.
+Las relaciones simétricas se reconocen por la dirección `Simétrica` de la leyenda y se consultan desde cualquiera de los extremos. Las relaciones `A → B` conservan su dirección. No se crean relaciones inversas dirigidas ni transitivas, ni se amplía automáticamente la lista de candidatas.
 
 ## Validaciones y límites
 

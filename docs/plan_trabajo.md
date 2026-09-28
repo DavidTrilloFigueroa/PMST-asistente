@@ -1,58 +1,90 @@
 # Plan de trabajo
 
-Estado: importador y catálogos completados. MVP local con interpretación, aclaración y comparación v5 exhaustiva: una única consulta de todos los objetivos elegibles, excluyendo MED-036 del envío sin eliminarla documentalmente. Implementación completada y 59 pruebas automáticas superadas sin inferencia real. El siguiente paso acordado es la primera evaluación semántica real A–E de v5. Calidad semántica no validada. Interfaz gráfica y acceso por internet fuera del alcance actual.
+Estado actualizado el 28 de septiembre de 2026: importador, catálogos, comparación v5, presentación en terminal y primera interfaz web local completados. La evaluación real v5 confirmó la mecánica exhaustiva y reveló sobreselección semántica. El próximo paso inmediato es validar manualmente el flujo web completo; después se abordará la precisión con casos nuevos.
 
-## Flujo final acordado
+## Flujo funcional vigente
 
-1. El usuario plantea su necesidad.
-2. El modelo la reformula como objetivo y pregunta solo si hay una ambigüedad relevante.
-3. Compara exclusivamente con los objetivos documentados y selecciona las medidas con coincidencia alta o parcial.
-4. La futura presentación muestra una ficha por candidata con nombre e identificador, descripción breve documentada, objetivo documentado, relaciones relevantes y KPIs del archivo de asociaciones.
-5. El usuario selecciona una o varias medidas.
-6. Cada medida elegida tendrá un desplegable propio con actores implicados, presupuesto y fases en su orden original.
+1. El usuario plantea una necesidad en terminal o Streamlit.
+2. Qwen reformula el objetivo y pide una aclaración cuando existe una ambigüedad relevante.
+3. Una única consulta compara el objetivo interpretado con todos los objetivos elegibles, usando exclusivamente `id` y `objetivo`.
+4. El programa valida la cobertura completa y recupera localmente la documentación de las candidatas.
+5. Se muestran primero coincidencias altas y después parciales, con descripción breve, objetivo y KPIs.
+6. El usuario selecciona una o varias medidas.
+7. Se muestran actores, presupuesto y fases de cada medida por separado.
+8. Se muestran exclusivamente las relaciones documentadas entre las medidas seleccionadas, respetando dirección y simetría.
 
-La información ausente se muestra como «No consta en la documentación». En esta etapa están implementados los tres primeros pasos mediante terminal. Las fichas, la selección visual y los desplegables son las siguientes tareas.
+La información ausente se muestra como «No consta en la documentación». No se deducen relaciones inversas dirigidas, transitivas ni nuevas candidatas por relación.
 
 ## 1. Preparación
 
-Completada. Estructura y repositorio local preparados. Entorno `.venv` con Python 3.13 y openpyxl, dependencias fijadas en `requirements.txt`. Comandos de PowerShell documentados en README; no se cambia la política de ejecución.
+Completada. Entorno `.venv` con Python 3.13, openpyxl y Streamlit 1.64.0. Dependencias fijadas en `requirements.txt`. El proyecto permanece completamente local.
 
 ## 2. Revisión documental
 
-Completada para la versión actual de los tres Excel revisados manualmente. Se han inspeccionado encabezados, hojas, formato de asociaciones y leyenda de relaciones simétricas y dirigidas. No se realiza conciliación automática de IDs. Se comprueba la integridad de los originales mediante huellas SHA-256.
+Completada para los tres Excel actuales. Se preservan identificadores, textos, orden de fases, procedencia y huellas SHA-256. No se realiza conciliación automática de IDs.
 
 ## 3. Catálogo estructurado
 
-Completada. El comando `.\.venv\Scripts\python.exe -m src.importar_catalogo` genera los seis catálogos y el informe en `data/procesados/`. Conserva textos, fases como texto original, identificadores y procedencia. `objetivos_busqueda.json` contiene solo `id` y `objetivo`. El texto de KPIs de la ficha permanece separado de las asociaciones del Excel específico.
+Completada. `src/importar_catalogo.py` genera y valida medidas, objetivos de búsqueda, relaciones, tipos de relación, KPIs, asociaciones e informe. `objetivos_busqueda.json` contiene exclusivamente `id` y `objetivo`.
 
-## 4. Búsqueda por objetivos
+## 4. Selección por objetivos
 
-Implementada la comparación v5 con `qwen3.6:latest`. Una única consulta recibe exclusivamente el objetivo interpretado y todos los objetos elegibles `id`/`objetivo` (actualmente 37; MED-036 excluida en memoria). Qwen devuelve `estado` y `evaluaciones`, una por ID, con `decision` alta/parcial/descartar, justificación y condición. Alta requiere justificación y condición null; parcial exige ambos textos y un límite expresamente documentado; descartar exige ambos null. Sin coincidencias exige todas descartadas. El código rechaza cobertura incompleta, IDs duplicados/no enviados/excluidos y estados o campos incoherentes. Deriva tres grupos y presenta solo altas y parciales, por ID dentro de cada grupo, recuperando nombres y objetivos localmente después de validar. No hay lotes ni reintentos.
+Implementada mediante interpretación v1 y comparación v5 exhaustiva en `src/consulta_guiada.py`:
 
-Reproducibilidad: temperatura 0 y semilla 42 para ambas etapas, sin pensamiento. Se conservan los límites configurables de contexto, generación y espera. La respuesta exhaustiva puede necesitar más generación; no se cambia automáticamente y un truncamiento invalida toda la selección. El evaluador conserva el nombre `src/evaluar_seleccion_v4.py`, pero guardará la primera evaluación exhaustiva en `evaluacion_seleccion_v5.json` y rechazará sobrescribirla.
+- Una consulta con todos los objetivos elegibles; actualmente 37 de 38.
+- MED-036 filtrada en memoria sin eliminarla del catálogo documental.
+- Temperatura 0, semilla 42 y pensamiento desactivado.
+- Decisiones `alta`, `parcial` o `descartar` para cada ID.
+- Rechazo de cobertura incompleta, duplicados, IDs desconocidos o excluidos, truncamientos y formatos incoherentes.
+- Sin lotes ni reintentos automáticos.
+- Recuperación de datos documentales solo después de validar la respuesta.
 
-Siguiente paso: ejecutar una sola pasada real A–E con el catálogo vigente y `qwen3.6:latest`. Antes se comprobarán modelo, digest, metadatos y ausencia del informe v5. Se registrarán respuestas brutas, salidas procesadas, tiempos, cobertura de los 37 IDs, exclusión de MED-036 e integridad de archivos. Después habrá revisión humana separada de altas, parciales, condiciones y descartes. No se modificará el prompt ni se repetirá la batería tras observar el resultado.
+La evaluación real A–E se ejecutó el 23 de septiembre de 2026 y se conserva en `evaluacion_seleccion_v5_real_01.json`, con informe y anexo en `docs/`. Técnicamente cubrió los 37 IDs y excluyó MED-036. Semánticamente recuperó las medidas directas esperadas, pero generó demasiadas candidatas al inferir reducciones del coche desde mecanismos como modos alternativos, teletrabajo o movilidad compartida.
 
-La evaluación v4 se ejecutó una sola vez y quedó en `data/procesados/evaluacion_seleccion_v4.json`. Las cinco comparaciones incluyeron el catálogo completo, terminaron sin errores ni truncamientos y preservaron los originales, objetivos e informes previos. C pidió e integró la aclaración; E no pidió la aclaración esperada. Qwen devolvió `sin_coincidencias` en todos los casos. El resultado automático fue seis de nueve, pero cuatro comprobaciones se superan porque una lista vacía excluye MED-018 y evita marcar MED-029 como alta. A y B omitieron todas las medidas esperadas, incluida MED-005, MED-024 y MED-030. La calidad semántica no está validada y no se repetirá ni ajustará la misma pasada para forzar el resultado.
+No repetir la batería A–E ni ajustar el prompt para mejorar artificialmente ese resultado. La siguiente intervención semántica deberá evaluarse con casos nuevos y centrarse en la diferencia entre efecto expresamente documentado y efecto inferido.
 
-La evaluación v3 y sus lotes quedan como referencia histórica en `data/procesados/evaluacion_seleccion_v3.json`. No forman parte del flujo vigente.
+## 5. Presentación local
 
-## 5. Presentación
+Completada en `src/presentacion_terminal.py` y reutilizada por terminal y web:
 
-Pendiente. Para cada candidata validada, crear una ficha con nombre e ID, descripción breve documentada, objetivo que justifica la coincidencia, relaciones relevantes y KPIs del archivo de asociaciones. Indicar «No consta en la documentación» ante datos ausentes. Permitir consultar relaciones simétricas desde ambos extremos; conservar origen y destino de las dirigidas, sin inferir inversas ni transitivas.
+- Descripción breve desde el primer párrafo documental, limitada a 350 caracteres.
+- Objetivo documental y KPIs procedentes de catálogos locales.
+- Justificación y condición visibles para coincidencias parciales.
+- Actores, presupuesto y fases por medida seleccionada.
+- Relaciones filtradas a los dos extremos seleccionados, con dirección documental.
 
-## 6. Selección e implementación por medida
+## 6. Terminal
 
-Pendiente. Permitir seleccionar visualmente una o varias medidas. Cada elegida tendrá un desplegable propio con actores implicados, presupuesto y fases documentadas en el orden original. No incluye seguimiento operativo, asignación de tareas ni control de ejecución.
+Completada en `src/consulta_terminal.py`. Admite petición interactiva o `--peticion`, aclaraciones, tarjetas, selección múltiple por IDs, salida limpia, detalles y relaciones. Cuatro pruebas locales afectadas pasaron sin Ollama.
 
-## 7. Conversación
+## 7. Interfaz web
 
-Implementada por terminal. Conserva petición y aclaraciones, formula una pregunta cada vez y realiza una sola comparación exhaustiva cuando el objetivo queda listo. Pendiente validar v5 mediante su primera evaluación semántica real; después, convertir el flujo en una experiencia visual y enlazar las candidatas con fichas y selección posterior.
+Primera versión completada en `src/app_web.py` con Streamlit:
+
+- Barra lateral, `Nueva consulta` y estado local de sesión.
+- Conversación con mensajes diferenciados e historial visible durante la sesión.
+- Caja de chat inferior e indicador de procesamiento.
+- Tarjetas separadas para altas y parciales.
+- Selección mediante casillas y resumen de cantidad.
+- Detalles y relaciones de las medidas seleccionadas.
+- Estética institucional en azul marino, cian, naranja, blanco y gris claro.
+
+La aplicación importa y arranca técnicamente en modo headless sin consultar Qwen. Falta una validación manual completa en navegador con Ollama local. No existe persistencia entre reinicios, autenticación, base de datos, exportación ni acceso público.
 
 ## 8. Validación
 
-Completada para el importador: pruebas sintéticas aisladas con unittest, importación real, contraste de recuentos revisados, referencias y nombres, duplicados con simetría, separación estricta de objetivos, integridad de originales y conservación del catálogo anterior ante errores. Resultados privados en `docs/validacion_importacion.md` y `data/procesados/informe_validacion.json`, excluidos de Git.
+- Última suite completa documentada: 59 pruebas superadas el 22 de septiembre de 2026, sin inferencia real.
+- Presentación local: 4 pruebas afectadas superadas el 23 de septiembre de 2026.
+- Evaluación v5 real: técnicamente válida; calidad semántica insuficiente por sobreselección.
+- Streamlit: importación y arranque headless correctos; importación repetida correctamente después de los ajustes visuales y de historial.
+- La suite completa no se ha repetido después de incorporar presentación y web.
 
-Completada la validación automática de v5 con 59 pruebas: consulta única, 37 elegibles derivados dinámicamente, MED-036 excluida sin alterar el catálogo, cobertura exacta, rechazo de omitidos/duplicados/desconocidos, decisiones y estados coherentes, separación estricta de campos, orden estable, recuperación documental posterior y ausencia de reintentos. La comprobación del cuerpo confirmó temperatura 0, semilla 42 y envío exclusivo de `id`/`objetivo`.
+## Próximos pasos
 
-Las evaluaciones v4 quedan como historial: la inicial produjo listas vacías y las revisiones posteriores recuperaron candidatas con errores semánticos. La primera evaluación real v5 aún no se ha ejecutado. Después de ella, y solo si la calidad es suficiente, quedarán las fichas documentales, la selección visual y los desplegables por medida. No incluir datos sintéticos de pruebas en el catálogo real.
+1. Ejecutar una prueba manual de Streamlit con consulta directa y otra que requiera aclaración.
+2. Verificar historial, tarjetas, selección múltiple, persistencia durante reruns, detalles, relaciones y reinicio.
+3. Registrar cualquier fallo funcional de interfaz sin modificar la selección semántica durante esa prueba.
+4. Diseñar después el cambio semántico mínimo para impedir altas basadas solo en mecanismos y parciales sin condición documental suficiente.
+5. Evaluar ese cambio con casos nuevos, manteniendo A–E como referencia histórica cerrada.
+
+El seguimiento operativo de la implantación, la publicación en internet, las cuentas y la persistencia continúan fuera del alcance.
